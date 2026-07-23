@@ -89,39 +89,100 @@ html, body {
   margin-top: 2px;
 }
 
-/* ---- Demo rail (right side) ---------------------------------------------- */
+/* ---- Demo picker (top-right dropdown) ------------------------------------ */
 #rail {
   position: fixed;
-  top: 50%;
-  right: max(18px, env(safe-area-inset-right));
-  transform: translateY(-50%);
-  z-index: 20;
+  top: max(20px, env(safe-area-inset-top));
+  right: max(20px, env(safe-area-inset-right));
+  z-index: 24;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: 232px;
+  align-items: flex-end;
+  gap: 8px;
 }
-.rail-item {
-  text-align: left;
-  border: 1px solid var(--line);
+.rail-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: -0.2px;
+  color: var(--ink);
   background: var(--glass);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
+}
+.rail-toggle:hover { border-color: rgba(229, 217, 199, 0.5); }
+#rail.open .rail-toggle { border-color: var(--sand); background: var(--glass-strong); }
+.rail-toggle-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rail-toggle-index {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--sand);
+}
+.rail-caret {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin-top: -4px;
+  border-right: 1.5px solid var(--sand);
+  border-bottom: 1.5px solid var(--sand);
+  transform: rotate(45deg);
+  transition: transform 0.3s var(--ease), margin-top 0.3s var(--ease);
+}
+#rail.open .rail-caret { transform: rotate(225deg); margin-top: 3px; }
+.rail-menu {
+  min-width: 236px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+}
+#rail.open .rail-menu { opacity: 1; transform: none; pointer-events: auto; }
+.rail-item {
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--ink);
   border-radius: var(--radius);
-  padding: 13px 15px;
+  padding: 10px 12px;
   cursor: pointer;
-  transition: border-color 0.35s var(--ease), background 0.35s var(--ease), transform 0.35s var(--ease);
+  transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
   font-family: var(--font-body);
 }
-.rail-item:hover { transform: translateX(-4px); border-color: rgba(229, 217, 199,0.5); }
+.rail-item:hover { background: rgba(239, 234, 226, 0.08); }
 .rail-item.active {
   border-color: var(--sand);
-  background: var(--glass-strong);
+  background: rgba(229, 217, 199, 0.1);
 }
 .rail-index {
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--sand);
@@ -130,73 +191,101 @@ html, body {
 .rail-title {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 19px;
-  letter-spacing: -0.5px;
+  font-size: 15px;
+  letter-spacing: -0.3px;
   line-height: 1.15;
-  margin-top: 3px;
-}
-.rail-scale {
-  font-size: 12px;
-  color: var(--ink-muted);
-  margin-top: 4px;
-  letter-spacing: 0.03em;
+  margin-top: 2px;
 }
 
-/* ---- Info drawer (bottom-left) — cream "paper" panel, ink text ----------- */
+/* ---- Info leaf (bottom-left) — compact cream panel, ink text --------------
+   Collapses horizontally: the panel slides off the left edge and only the
+   arrow tab (#drawer-toggle) stays hanging at the bottom-left. */
 #drawer {
   position: fixed;
-  left: max(20px, env(safe-area-inset-left));
-  bottom: max(70px, calc(env(safe-area-inset-bottom) + 66px));
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 20;
-  width: min(380px, calc(100vw - 40px));
+  width: min(300px, calc(100vw - 76px));
   background: rgba(251, 247, 240, 0.94);  /* --paper-light, slightly glassy */
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
   border: 1px solid rgba(50, 32, 17, 0.14);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px 20px;
+  padding: 14px 16px;
   color: var(--espresso);                 /* espresso ink on paper */
-  transition: opacity 0.4s var(--ease), transform 0.4s var(--ease);
+  transition: transform 0.4s var(--ease);
+}
+#drawer.collapsed { transform: translateX(calc(-100% - 20px)); }
+
+/* The arrow tab rides on the panel's right edge, so it travels with the slide. */
+#drawer-toggle {
+  position: absolute;
+  right: -38px;
+  bottom: 0;
+  width: 30px;
+  height: 36px;
+  background: rgba(251, 247, 240, 0.94);
+  border: 1px solid rgba(50, 32, 17, 0.14);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: background 0.3s var(--ease);
+}
+#drawer-toggle:hover { background: var(--paper-light); }
+#drawer-toggle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--espresso);
+  border-bottom: 1.5px solid var(--espresso);
+  transform: translate(-30%, -50%) rotate(135deg);  /* ‹ points at the panel */
+  transition: transform 0.3s var(--ease);
+}
+#drawer.collapsed #drawer-toggle::before {
+  transform: translate(-70%, -50%) rotate(-45deg);  /* › points back out */
 }
 .drawer-scale {
   display: inline-block;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--espresso);
   border: 1px solid rgba(50, 32, 17, 0.35);
   border-radius: var(--radius-pill);
-  padding: 3px 10px;
-  margin-bottom: 8px;
+  padding: 2px 9px;
+  margin-bottom: 7px;
 }
 .drawer-title {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 26px;
-  letter-spacing: -1px;     /* JFTR heading tracking */
+  font-size: 20px;
+  letter-spacing: -0.7px;   /* JFTR heading tracking */
   line-height: 1.1;
-  margin: 0 0 6px;
+  margin: 0 0 5px;
 }
 .drawer-desc {
-  font-size: 15.5px;
-  line-height: 1.5;
+  font-size: 13.5px;
+  line-height: 1.45;
   color: var(--espresso-muted);
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 .hero-menu-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--espresso-muted);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
-.hero-menu { display: flex; flex-wrap: wrap; gap: 8px; }
+.hero-menu { display: flex; flex-wrap: wrap; gap: 6px; }
 .hero-chip {
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;  /* JFTR outline pill button (ink on paper) */
   letter-spacing: 0.02em;
@@ -204,7 +293,7 @@ html, body {
   background: transparent;
   border: 1px solid rgba(50, 32, 17, 0.35);
   border-radius: var(--radius-pill);
-  padding: 7px 14px;
+  padding: 5px 11px;
   cursor: pointer;
   transition: background 0.3s var(--ease), border-color 0.3s var(--ease), color 0.3s var(--ease);
 }
@@ -327,20 +416,20 @@ html, body {
   left: 50%;
   right: auto;
   top: auto;
-  bottom: max(80px, calc(env(safe-area-inset-bottom) + 76px));
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 20px));
   width: min(520px, calc(100vw - 40px));
   transform: translateX(-50%) translateY(24px);
 }
 #hero-card.bottom.open { transform: translateX(-50%) translateY(0); }
 
-/* ---- Disclaimer footer button -------------------------------------------- */
+/* ---- Disclaimer button (directly below the brand mark) ------------------- */
 #disclaimer-open {
   position: fixed;
-  left: max(20px, env(safe-area-inset-left));
-  bottom: max(20px, env(safe-area-inset-bottom));
+  top: calc(max(20px, env(safe-area-inset-top)) + 54px);
+  left: 24px;
   z-index: 20;
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -350,7 +439,7 @@ html, body {
   -webkit-backdrop-filter: var(--blur);
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
-  padding: 9px 16px;
+  padding: 5px 12px;
   cursor: pointer;
   transition: color 0.3s var(--ease), border-color 0.3s var(--ease);
 }
@@ -504,23 +593,21 @@ html, body {
 /* ---- Mobile ------------------------------------------------------------- */
 @media (max-width: 720px) {
   #rail {
-    top: auto;
-    bottom: max(66px, calc(env(safe-area-inset-bottom) + 62px));
+    top: max(14px, env(safe-area-inset-top));
     right: 12px;
-    left: 12px;
-    transform: none;
-    flex-direction: row;
-    width: auto;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
-  .rail-item { flex: 0 0 auto; min-width: 148px; }
-  .rail-item:hover { transform: none; }
+  .rail-toggle { padding: 8px 13px; font-size: 12px; }
+  .rail-toggle-label { max-width: 38vw; }
+  .rail-menu { min-width: min(236px, calc(100vw - 24px)); }
   #drawer {
-    bottom: max(150px, calc(env(safe-area-inset-bottom) + 148px));
-    width: calc(100vw - 24px);
+    left: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: min(280px, calc(100vw - 68px));
   }
-  .brand-mark { font-size: 21px; }
+  #drawer.collapsed { transform: translateX(calc(-100% - 16px)); }
+  .brand-mark { font-size: 20px; }
+  #brand { left: 16px; }
+  #disclaimer-open { left: 16px; top: calc(max(14px, env(safe-area-inset-top)) + 50px); }
 
   /* Card becomes a bottom sheet on small screens. */
   #hero-card {

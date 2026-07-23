@@ -27,6 +27,7 @@ export class UI {
   private demos: Demo[];
   private cb: UICallbacks;
   private railItems: HTMLButtonElement[] = [];
+  private railToggle!: HTMLButtonElement;
   private cardTimer?: number;
   private anchoredTimer?: number;
 
@@ -34,13 +35,27 @@ export class UI {
     this.demos = demos;
     this.cb = cb;
     this.buildRail();
+    this.wireDrawer();
     this.wireDisclaimer();
     this.wireHeroCard();
   }
 
-  // ---- Rail --------------------------------------------------------------
+  // ---- Rail (top-right dropdown) ------------------------------------------
   private buildRail(): void {
     const rail = $('rail');
+
+    // The always-visible pill: shows the current demo, toggles the menu.
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'rail-toggle';
+    toggle.setAttribute('aria-haspopup', 'true');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.innerHTML = `<span class="rail-toggle-label">Explore</span><span class="rail-caret" aria-hidden="true"></span>`;
+
+    // The dropdown menu holding the three demos.
+    const menu = document.createElement('div');
+    menu.className = 'rail-menu';
+
     this.demos.forEach((demo, i) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -49,17 +64,64 @@ export class UI {
         <div class="rail-index">${String(i + 1).padStart(2, '0')} · ${demo.scale}</div>
         <div class="rail-title">${demo.title}</div>
       `;
-      btn.addEventListener('click', () => this.cb.onSelectDemo(i));
-      rail.appendChild(btn);
+      btn.addEventListener('click', () => {
+        this.cb.onSelectDemo(i);
+        this.closeRail();
+      });
+      menu.appendChild(btn);
       this.railItems.push(btn);
+    });
+
+    rail.appendChild(toggle);
+    rail.appendChild(menu);
+    this.railToggle = toggle;
+
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (rail.classList.contains('open')) this.closeRail();
+      else this.openRail();
+    });
+    // Click anywhere else (or Escape) closes the menu.
+    document.addEventListener('click', (e) => {
+      if (rail.classList.contains('open') && !rail.contains(e.target as Node)) this.closeRail();
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.closeRail();
     });
   }
 
+  private openRail(): void {
+    $('rail').classList.add('open');
+    this.railToggle.setAttribute('aria-expanded', 'true');
+  }
+
+  private closeRail(): void {
+    $('rail').classList.remove('open');
+    this.railToggle.setAttribute('aria-expanded', 'false');
+  }
+
   // ---- Drawer (per-demo context + hero menu) -----------------------------
+  // The arrow tab slides the leaf horizontally off the left edge.
+  private wireDrawer(): void {
+    const drawer = $('drawer');
+    const toggle = $('drawer-toggle');
+    toggle.addEventListener('click', () => {
+      const collapsed = drawer.classList.toggle('collapsed');
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+      toggle.setAttribute('aria-label', collapsed ? 'Show panel' : 'Hide panel');
+    });
+  }
+
   setActiveDemo(index: number): void {
     this.railItems.forEach((b, i) => b.classList.toggle('active', i === index));
     const demo = this.demos[index];
-    const drawer = $('drawer');
+    const drawer = $('drawer-content');
+
+    // Reflect the current demo in the dropdown pill.
+    const label = this.railToggle.querySelector<HTMLElement>('.rail-toggle-label');
+    if (label) {
+      label.innerHTML = `<span class="rail-toggle-index">${String(index + 1).padStart(2, '0')}</span>${demo.title}`;
+    }
 
     const heroMenu =
       demo.heroPoints.length > 0
