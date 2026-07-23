@@ -41,7 +41,7 @@ export async function createDevice(canvas: HTMLCanvasElement): Promise<DeviceRes
   const renderer: DeviceResult['renderer'] = device.isWebGPU ? 'webgpu' : 'webgl2';
   // Decided behavior: fall back SILENTLY (no "compatibility mode" label to the
   // client) but LOG the active renderer so we can confirm which path ran in testing.
-  console.info(`[morisot] active renderer: ${renderer}`);
+  console.info(`[darilux] active renderer: ${renderer}`);
 
   return { device, renderer };
 }

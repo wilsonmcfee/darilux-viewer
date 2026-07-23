@@ -97,11 +97,14 @@ export class HeroPointManager {
     const w = card.offsetWidth;
     const h = card.offsetHeight;
     const margin = 8;
-    // Sit to the right of the dot; clamp so the card never leaves the viewport.
+    // Sit to the right of the dot; clamp so the card never leaves the viewer
+    // window (the layer overlays the canvas exactly, so its size is the window's).
+    const boundsW = this.layer.clientWidth || window.innerWidth;
+    const boundsH = this.layer.clientHeight || window.innerHeight;
     let x = this.screen.x + 20;
     let y = this.screen.y;
-    x = Math.min(Math.max(x, margin), window.innerWidth - w - margin);
-    y = Math.min(Math.max(y, h / 2 + margin), window.innerHeight - h / 2 - margin);
+    x = Math.min(Math.max(x, margin), boundsW - w - margin);
+    y = Math.min(Math.max(y, h / 2 + margin), boundsH - h / 2 - margin);
     card.style.left = `${x}px`;
     card.style.top = `${y}px`;
   }

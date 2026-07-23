@@ -38,7 +38,7 @@ thing refined in a final capture. The larger common-room scene is a **composite
 of two captures**, included to show how fidelity holds across a bigger space.
 
 *Shared in confidence with Just For The Record. Please don't redistribute.
-— Morisot Studio*
+— Darilux Studio*
 
 ---
 

@@ -109,7 +109,7 @@ export class OrbitFlyCamera {
     this.attachInput();
     this.apply();
     console.info(
-      '[morisot] camera — drag: orbit · right-drag / Shift+wheel: pan · wheel: zoom · ' +
+      '[darilux] camera — drag: orbit · right-drag / Shift+wheel: pan · wheel: zoom · ' +
         'WASD + Q/E: fly (Shift = faster) · run __logPose() to capture a pose',
     );
   }

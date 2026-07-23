@@ -3,64 +3,213 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#17100a" />
-    <title>Morisot Studio — Just For The Record</title>
+    <meta name="theme-color" content="#efeae2" />
+    <title>Darilux Studio — Just For The Record</title>
     <meta
       name="description"
       content="Interactive 3D captures of Just For The Record — explore the rooms and gear in your browser. No app required."
     />
 
-    <!-- JFTR brand typeface: Karla (400 body, 700/800 display). Preconnect so the fonts arrive fast. -->
+    <!-- Editorial pairing: Fraunces (display serif) + Inter (UI sans). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Karla:ital,wght@0,400;0,700;0,800;1,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
   </head>
   <body>
-    <!-- The splat renders here. Everything else is HTML/CSS layered on top. -->
-    <canvas id="viewer"></canvas>
+    <!-- ======================================================================
+         THE STAGE — one shared 3D viewport (canvas + overlays), created once
+         and MOVED into whichever .viewer window the visitor enters. Only one
+         scene is ever live, so only one window hosts the stage at a time.
+         It lives in this hidden parking element until the first Enter click.
+         ====================================================================== -->
+    <div id="stage-dock" hidden>
+      <div id="stage">
+        <canvas id="viewer"></canvas>
 
-    <!-- Hero-point markers are injected into this layer and positioned each frame. -->
-    <div id="hero-layer" aria-hidden="true"></div>
+        <!-- Hero-point markers are injected here and positioned each frame. -->
+        <div id="hero-layer" aria-hidden="true"></div>
 
-    <!-- Brand mark, top-left. -->
-    <header id="brand">
-      <div class="brand-mark">Morisot&nbsp;Studio</div>
-      <div class="brand-sub">for Just&nbsp;For&nbsp;The&nbsp;Record</div>
+        <!-- Hero-point description card (HUD variants). -->
+        <aside id="hero-card" class="hidden" role="dialog" aria-label="Gear details">
+          <button id="hero-card-close" class="modal-close" type="button" aria-label="Close">×</button>
+          <div id="hero-card-body"></div>
+        </aside>
+
+        <!-- Anchored variant: pinned to the hero's 3D point each frame. -->
+        <aside id="hero-card-anchored" class="hidden" role="dialog" aria-label="Gear details">
+          <button id="hero-card-anchored-close" class="modal-close" type="button" aria-label="Close">×</button>
+          <div id="hero-card-anchored-body"></div>
+        </aside>
+
+        <!-- Loading veil shown while a splat streams in. -->
+        <div id="loading" class="hidden">
+          <div class="spinner" role="status" aria-label="Loading scene"></div>
+          <div id="loading-label">Loading…</div>
+        </div>
+
+        <!-- Returns the active window to its poster (and frees the scene). -->
+        <button id="stage-exit" type="button" aria-label="Leave the room">×</button>
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         PAGE
+         ====================================================================== -->
+    <header class="site-head">
+      <div class="wrap">
+        <div class="site-brand">
+          <span class="brand-name">Darilux&nbsp;Studio</span>
+          <span class="brand-for">for Just&nbsp;For&nbsp;The&nbsp;Record</span>
+        </div>
+        <button id="disclaimer-open" type="button">About this demo</button>
+      </div>
     </header>
 
-    <!-- Small control directly below the brand: opens the disclaimer. -->
-    <button id="disclaimer-open" type="button">About this demo</button>
+    <!-- ================================ STUDIO E ============================ -->
+    <section class="section studio-e">
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="eyebrow">Just For The Record · Studios</span>
+          <h1>Studio E</h1>
+          <p class="sub">Full Immersion</p>
+        </div>
 
-    <!-- Demo picker, top-right: a dropdown built by ui.ts from demos.ts. -->
-    <nav id="rail" aria-label="Choose a demo"></nav>
+        <div class="viewer-window ratio-16x9" data-demo="studio-e">
+          <div class="poster">
+            <div class="room"></div>
+            <div class="inner">
+              <div class="kicker">Interactive walkthrough</div>
+              <div class="roomname">Enter Studio E</div>
+              <button class="enter" type="button"><span class="tri"></span> Step into the room</button>
+              <div class="hint">Move freely · tap the gear · no app needed</div>
+            </div>
+          </div>
+        </div>
 
-    <!-- Info leaf, bottom-left. Collapses horizontally behind an arrow tab. -->
-    <section id="drawer" aria-live="polite">
-      <button id="drawer-toggle" type="button" aria-expanded="true" aria-label="Hide panel"></button>
-      <div id="drawer-content"></div>
+        <div class="viewer-caption">
+          <span><b>Dolby 9.1.4</b> Atmos certified</span>
+          <span><b>Full-room</b> capture</span>
+          <span><b>Live 3D</b> — rendered in your browser</span>
+        </div>
+
+        <div class="detail">
+          <div class="about">
+            <h2>about studio E</h2>
+            <p>
+              An immersive sound environment for artists — a Dolby-certified 9.1.4 Atmos
+              mixing room that renders your mix in breathtaking detail. With cutting-edge
+              technology and precision acoustic treatment, Studio E makes sure your work
+              translates faithfully across every playback environment, from headphones to
+              a full theater.
+            </p>
+          </div>
+          <div class="amenities">
+            <h2>amenities</h2>
+            <ul>
+              <li>Full access to our instrument and gear library</li>
+              <li>Assistant engineer, 24/7</li>
+              <li>Studio runner, 24/7</li>
+              <li>Engineer available (additional hourly fee)</li>
+              <li>Complimentary coffee, tea, water &amp; snacks</li>
+              <li>Lounge and patio access</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="downloads">
+          <a class="dl" href="https://justfortherecord.com/wp-content/uploads/2024/07/STUDIO-E-SETUP-updated-March-2024.pdf">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+            Download Gear List
+          </a>
+          <a class="dl" href="https://justfortherecord.com/wp-content/uploads/2024/07/Studio-E-Layout.pdf">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+            Download Floor Plan
+          </a>
+        </div>
+      </div>
     </section>
 
-    <!-- Hero-point description card. Opens when a dot or a menu item is clicked. -->
-    <aside id="hero-card" class="hidden" role="dialog" aria-label="Gear details">
-      <button id="hero-card-close" class="modal-close" type="button" aria-label="Close">×</button>
-      <div id="hero-card-body"></div>
-    </aside>
+    <!-- =============================== COMMON ROOM ========================= -->
+    <section class="section common-room">
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="eyebrow">Just For The Record · Common Areas</span>
+          <h1>Common Room</h1>
+          <p class="sub">The Collection</p>
+        </div>
 
-    <!-- Anchored variant: a small callout pinned to the hero's 3D point.
-         Positioned each frame by the hero-point manager. -->
-    <aside id="hero-card-anchored" class="hidden" role="dialog" aria-label="Gear details">
-      <button id="hero-card-anchored-close" class="modal-close" type="button" aria-label="Close">×</button>
-      <div id="hero-card-anchored-body"></div>
-    </aside>
+        <!-- 01 · THE ROOM -->
+        <div class="viewer-label">
+          <span class="idx">01</span>
+          <span class="name">The Room</span>
+          <span class="desc">— full walkthrough</span>
+        </div>
+        <div class="viewer-window ratio-16x9" data-demo="common-room">
+          <div class="poster">
+            <div class="room"></div>
+            <div class="inner">
+              <div class="kicker">Interactive walkthrough</div>
+              <div class="roomname">Enter the Common Room</div>
+              <button class="enter" type="button"><span class="tri"></span> Step into the room</button>
+              <div class="hint">Move freely · tap the gear · no app needed</div>
+            </div>
+          </div>
+        </div>
+        <div class="viewer-caption">
+          <span><b>Base scan</b> — the whole room</span>
+          <span><b>Lounge</b> &amp; collaboration space</span>
+          <span><b>Composite</b> of two captures</span>
+        </div>
 
-    <!-- Loading veil shown while a splat streams in. -->
-    <div id="loading" class="hidden">
-      <div class="spinner" role="status" aria-label="Loading scene"></div>
-      <div id="loading-label">Loading…</div>
-    </div>
+        <div class="block-gap"></div>
+
+        <!-- 02 · THE SYNTHS -->
+        <div class="viewer-label">
+          <span class="idx">02</span>
+          <span class="name">The Synths</span>
+          <span class="desc">— hero-point capture</span>
+        </div>
+        <div class="synth-grid">
+          <div class="viewer-window ratio-tall" data-demo="synths">
+            <div class="poster">
+              <div class="room"></div>
+              <div class="inner">
+                <div class="kicker">Hero point</div>
+                <div class="roomname">The synths</div>
+                <button class="enter" type="button"><span class="tri"></span> Explore the collection</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="collection">
+            <h2>the collection</h2>
+            <p class="lede">
+              A close, high-detail capture of the room's synthesizers — orbit each one
+              and read its story.
+            </p>
+            <!-- Rendered by ui.ts from demos.ts, so the list and the 3D hero points
+                 always agree. -->
+            <ul class="synth-list" id="synth-list"></ul>
+          </div>
+        </div>
+
+        <!-- Closing CTA -->
+        <div class="cr-cta">
+          <span class="msg">Come play the collection.</span>
+          <a class="btn-dark" href="https://justfortherecord.com/contact/">Book a Studio Tour →</a>
+        </div>
+      </div>
+    </section>
+
+    <footer class="site-foot">
+      <div class="wrap">
+        <span>Captured &amp; built by Darilux Studio</span>
+        <span class="foot-note">Interactive 3D — Gaussian splatting, rendered live in your browser</span>
+      </div>
+    </footer>
 
     <!-- Disclaimer modal (content set in ui.ts; copy lives in DISCLAIMER-DRAFT.md). -->
     <div id="disclaimer" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="disclaimer-title">

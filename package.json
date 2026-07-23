@@ -1,9 +1,9 @@
 {
-  "name": "morisot-jftr-demo",
+  "name": "darilux-jftr-demo",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Morisot Studio — interactive 3D Gaussian splat demo reel for Just For The Record (three scenes: synths, Studio E, common room).",
+  "description": "Darilux Studio — interactive 3D Gaussian splat demo reel for Just For The Record (three scenes: synths, Studio E, common room).",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

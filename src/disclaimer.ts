@@ -43,6 +43,6 @@ export const DISCLAIMER_HTML = `
 
   <p style="margin-top:18px;opacity:0.8;">
     Shared in confidence with Just&nbsp;For&nbsp;The&nbsp;Record. Please don't
-    redistribute. — Morisot&nbsp;Studio
+    redistribute. — Darilux&nbsp;Studio
   </p>
 `;

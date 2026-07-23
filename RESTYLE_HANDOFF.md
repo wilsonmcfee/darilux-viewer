@@ -1,4 +1,4 @@
-# Restyle handoff — Morisot × JFTR demo viewer
+# Restyle handoff — Darilux × JFTR demo viewer
 
 Context for an agent restyling this page toward JFTR's brand. A separate style
 guide covers the visual direction; this doc covers **how the code is wired** so
@@ -9,10 +9,12 @@ break these" section before touching anything.
 
 ## What this is (30 seconds)
 
-A single-page app: a fullscreen PlayCanvas (WebGPU/WebGL2) Gaussian-splat viewer
-with three demos (Legendary Synthesizers, Studio E, Common Room). HTML/CSS UI is
-layered *over* a `<canvas>`. Stack: Vite + TypeScript + PlayCanvas engine. No
-framework, no Tailwind — plain CSS in one file.
+A single-page app: a scrolling editorial page with three "viewer windows"
+(`.viewer-window[data-demo]`). One shared `#stage` (the PlayCanvas `<canvas>`
+plus all viewer overlays) is created lazily and MOVED into whichever window the
+visitor enters; the previous window gets its poster back. Three demos (Studio E,
+Common Room, Legendary Synthesizers). Stack: Vite + TypeScript + PlayCanvas
+engine. No framework, no Tailwind — plain CSS in one file.
 
 ## Run & verify
 
@@ -49,29 +51,34 @@ The TypeScript queries elements by **id** and builds markup with specific
 class without updating the matching `.ts` file, or the app breaks silently.
 
 ### Element IDs the code depends on (keep the ids)
-`viewer`, `hero-layer`, `brand`, `rail`, `drawer`, `disclaimer-open`,
-`disclaimer`, `disclaimer-close`, `disclaimer-body`, `unsupported`, `loading`,
-`loading-label`, `hero-card`, `hero-card-close`, `hero-card-body`,
-`hero-card-anchored`, `hero-card-anchored-close`, `hero-card-anchored-body`.
+`stage`, `stage-dock`, `stage-exit`, `viewer`, `hero-layer`, `synth-list`,
+`disclaimer-open`, `disclaimer`, `disclaimer-close`, `disclaimer-body`,
+`unsupported`, `loading`, `loading-label`, `hero-card`, `hero-card-close`,
+`hero-card-body`, `hero-card-anchored`, `hero-card-anchored-close`,
+`hero-card-anchored-body`.
 (`author-crosshair` is injected by JS only when the URL has `?author`.)
+
+### Structural attributes/classes the code queries (keep these)
+- `.viewer-window[data-demo="…"]` — the bespoke windows; `data-demo` must match
+  a demo `id` in `demos.ts` (`studio-e`, `common-room`, `synths`).
+- `.enter` — the Enter button inside each window's `.poster`.
 
 ### Class names built in JS (in `src/ui.ts` and `src/heropoints.ts`)
 These are written via template strings, so a rename must happen in **both** the
-`.ts` and the CSS: `rail-item`, `rail-index`, `rail-title`, `active`,
-`drawer-scale`, `drawer-title`, `drawer-desc`, `hero-menu-label`, `hero-menu`,
-`hero-chip`, `hero-marker`, `hero-dot`, `hero-caption`, `hero-card-title`,
+`.ts` and the CSS: `hero-marker`, `hero-dot`, `hero-caption`, `hero-card-title`,
 `hero-card-icon`, `hero-card-sub`, `hero-card-desc`, `hero-card-placeholder`,
-`hero-card-specs`, `spinner`, `modal`, `modal-card`, `modal-close`.
+`hero-card-specs`, `s-name`, `s-meta`, `spinner`, `modal`, `modal-card`,
+`modal-close`.
 
 Prefer restyling by targeting these existing classes. If you want new structure,
 edit the template strings in `ui.ts` and keep them in sync.
 
 ### State classes toggled by JS (style the states, keep the names)
 - `.hidden` — global `display:none !important`; JS shows/hides with it.
+- `.live` — on the active `.viewer-window`: hides its `.poster`, shows `#stage-exit`.
 - `.open` — on `#hero-card`: triggers the slide-in transition.
 - `.show` — on `#hero-card-anchored`: fade-in.
 - `.bottom` — on `#hero-card`: the bottom-center placement variant (vs left).
-- `.active` — on the current `.rail-item`.
 
 ### Animation timing is coupled to JS timeouts
 When a card/veil hides, JS waits a fixed time before adding `.hidden`, matched to
@@ -95,11 +102,12 @@ are fine (the anchored card uses `translateY(-50%)`; keep that pattern).
 The 3D canvas clear color is set in **`src/main.ts`**, not CSS:
 
 ```ts
-clearColor: new Color(16 / 255, 19 / 255, 25 / 255, 1), // matches --bg #101319
+clearColor: new Color(20 / 255, 16 / 255, 12 / 255, 1), // matches --shell #14100c
 ```
 
-If you change `--bg`, update this line to match, or the splat's background won't
-match the UI. This is the one styling value that lives outside `style.css`.
+If you change `--shell` (the dark viewer-window ground), update this line to
+match, or the splat's background won't match the window it sits in. This is the
+one styling value that lives outside `style.css`.
 
 ---
 
@@ -125,8 +133,9 @@ classes updates every variant consistently.
 
 ## Responsive
 
-One breakpoint: `@media (max-width: 720px)`. It moves the rail to a bottom strip
-and turns the left card into a bottom sheet. Keep a mobile pass in your reskin.
+One breakpoint: `@media (max-width: 820px)`. It stacks the two-column grids,
+deepens the 16:9 windows to 4:3, and turns the hero card into a bottom sheet
+inside the window. Keep a mobile pass in your reskin.
 
 ## Accessibility niceties to preserve
 

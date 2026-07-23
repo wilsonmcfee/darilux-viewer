@@ -1,4 +1,4 @@
-# Morisot Studio — JFTR demo reel
+# Darilux Studio — JFTR demo reel
 
 An interactive, browser-based reel of three Gaussian-splat captures for **Just For The Record**, delivered as one page:
 
@@ -6,7 +6,7 @@ An interactive, browser-based reel of three Gaussian-splat captures for **Just F
 2. **Studio E** — medium scale, full-room coverage + 2 hero points
 3. **Common Room** — large scale, a composite of two captures showing fidelity across a bigger space
 
-The page is a fullscreen viewer with a demo rail (right), an info drawer (bottom-left), and an "About this demo" disclaimer. Only one splat is ever in memory at a time. Built on the PlayCanvas engine (WebGPU-first, WebGL2 fallback), the same architecture as the SuperSplat starter used for the pilot viewer.
+The page is a scrolling editorial layout (Fraunces + Inter on warm paper) with the viewers set INSIDE bespoke dark windows: a Studio E section, then a Common Room section (full walkthrough + a synths window with the collection list). Each window shows a styled poster until the visitor clicks "Enter" — then one shared stage (canvas + overlays) moves into that window and the scene streams in. Only one splat is ever in memory at a time; the engine itself isn't even created until the first Enter click. Built on the PlayCanvas engine (WebGPU-first, WebGL2 fallback), the same architecture as the SuperSplat starter used for the pilot viewer.
 
 ## Quick start
 
@@ -32,13 +32,13 @@ npm run preview      # serve the production build locally
 | `src/camera.ts` | Orbit + fly camera, eased hero fly-ins, `__logPose()` helper. |
 | `src/heropoints.ts` | The floating 3D-anchored gear labels. |
 | `src/device.ts` | WebGPU→WebGL2 device selection + the "unsupported browser" backstop. |
-| `src/ui.ts` / `src/style.css` | The overlay UI and the Morisot styling. |
+| `src/ui.ts` / `src/style.css` | The overlay UI and the Darilux styling. |
 
 ## Authoring hero points (the human-in-the-loop step)
 
 A splat is millions of unlabeled points — nothing marks "this is the console," and code can't render the scene to pick coordinates. So poses are authored by eye, exactly like the pilot rig:
 
-1. `npm run dev`, select the demo, and move to the framing you want. Controls: **drag** orbits, **right-drag / Shift+wheel** pans, **wheel** zooms, and **WASD + Q/E** flies through the scene (**Shift** = faster) — the quickest way to get up close to a piece of gear.
+1. `npm run dev`, click "Enter" on the demo's window, and move to the framing you want. Controls: **drag** orbits, **right-drag / Shift+wheel** pans, **wheel** zooms, and **WASD + Q/E** flies through the scene (**Shift** = faster) — the quickest way to get up close to a piece of gear.
 2. In the browser console run `__logPose()` — it prints a ready-to-paste pose.
 3. Paste it into `demos.ts` as either the demo's `initialPose` (opening shot) or a hero point's `pose` (where the fly-in lands). Save — it hot-reloads.
 
