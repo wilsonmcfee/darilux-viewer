@@ -1,0 +1,536 @@
+/* ============================================================================
+   Morisot Studio × Just For The Record — demo viewer styling
+   JFTR brand: espresso ink (#322011) + warm cream paper (#EFEAE2) + sand
+   accents (#E5D9C7). One typeface — Karla — bold and tightly tracked at
+   display sizes, small uppercase "eyebrow" labels, pill buttons/chips.
+   The viewer reads as a "dark section" of the brand: espresso ground,
+   cream ink. Overlays stay "glass" (translucent + blur) over the splat.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #17100a;            /* near-black warm ground for the negative space
+                               around the scans (darkened espresso) */
+  --bg-2: #201710;
+  --espresso: #322011;      /* JFTR ink/espresso — text on cream, dark panels */
+  --ink: #efeae2;           /* JFTR paper/cream, used as text on dark */
+  --ink-muted: rgba(239, 234, 226, 0.62);  /* muted cream secondary text */
+  --paper: #efeae2;         /* JFTR paper — light panel surface */
+  --paper-light: #fbf7f0;   /* JFTR paper-light — nav pill / panel surface */
+  --espresso-muted: rgba(50, 32, 17, 0.58); /* ink @ ~58%, muted text on cream */
+  --sand: #e5d9c7;          /* JFTR sand — the only brand accent */
+  --marker: #2ec4b6;        /* functional UI only: hero-point markers.
+                               Deliberately off-palette (teal complements the
+                               warm scans) so anchors are instantly findable. */
+  --line: rgba(239, 234, 226, 0.16);
+
+  --glass: rgba(50, 32, 17, 0.55);
+  --glass-strong: rgba(50, 32, 17, 0.85);
+  --blur: saturate(140%) blur(14px);
+
+  --shadow: 0 12px 40px rgba(20, 12, 5, 0.45);
+  --radius: 4px;            /* JFTR card radius is small; pills stay 999px */
+  --radius-pill: 999px;
+
+  --font-display: "Karla", sans-serif;
+  --font-body: "Karla", sans-serif;
+
+  --ease: ease;             /* JFTR standard: 300ms ease */
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The splat canvas fills the viewport behind everything. */
+#viewer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;   /* we handle all drag/zoom gestures ourselves */
+  outline: none;
+}
+
+.hidden { display: none !important; }
+
+/* ---- Brand mark ---------------------------------------------------------- */
+#brand {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top));
+  left: 24px;
+  z-index: 20;
+  pointer-events: none;
+  text-shadow: 0 1px 18px rgba(0, 0, 0, 0.6);
+}
+.brand-mark {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: -0.5px;   /* JFTR signature tight tracking */
+  color: var(--ink);
+}
+.brand-sub {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;   /* eyebrow label */
+  text-transform: uppercase;
+  color: var(--sand);
+  margin-top: 2px;
+}
+
+/* ---- Demo rail (right side) ---------------------------------------------- */
+#rail {
+  position: fixed;
+  top: 50%;
+  right: max(18px, env(safe-area-inset-right));
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 232px;
+}
+.rail-item {
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  color: var(--ink);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+  cursor: pointer;
+  transition: border-color 0.35s var(--ease), background 0.35s var(--ease), transform 0.35s var(--ease);
+  font-family: var(--font-body);
+}
+.rail-item:hover { transform: translateX(-4px); border-color: rgba(229, 217, 199,0.5); }
+.rail-item.active {
+  border-color: var(--sand);
+  background: var(--glass-strong);
+}
+.rail-index {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--sand);
+  text-transform: uppercase;
+}
+.rail-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+  margin-top: 3px;
+}
+.rail-scale {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 4px;
+  letter-spacing: 0.03em;
+}
+
+/* ---- Info drawer (bottom-left) — cream "paper" panel, ink text ----------- */
+#drawer {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(70px, calc(env(safe-area-inset-bottom) + 66px));
+  z-index: 20;
+  width: min(380px, calc(100vw - 40px));
+  background: rgba(251, 247, 240, 0.94);  /* --paper-light, slightly glassy */
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid rgba(50, 32, 17, 0.14);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  color: var(--espresso);                 /* espresso ink on paper */
+  transition: opacity 0.4s var(--ease), transform 0.4s var(--ease);
+}
+.drawer-scale {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--espresso);
+  border: 1px solid rgba(50, 32, 17, 0.35);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  margin-bottom: 8px;
+}
+.drawer-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -1px;     /* JFTR heading tracking */
+  line-height: 1.1;
+  margin: 0 0 6px;
+}
+.drawer-desc {
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--espresso-muted);
+  margin: 0 0 12px;
+}
+.hero-menu-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--espresso-muted);
+  margin-bottom: 8px;
+}
+.hero-menu { display: flex; flex-wrap: wrap; gap: 8px; }
+.hero-chip {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;  /* JFTR outline pill button (ink on paper) */
+  letter-spacing: 0.02em;
+  color: var(--espresso);
+  background: transparent;
+  border: 1px solid rgba(50, 32, 17, 0.35);
+  border-radius: var(--radius-pill);
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.3s var(--ease), border-color 0.3s var(--ease), color 0.3s var(--ease);
+}
+.hero-chip:hover { background: var(--espresso); border-color: var(--espresso); color: var(--paper); }
+.exit-close {
+  margin-top: 12px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--espresso);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: none;
+}
+.exit-close.show { display: inline-block; }
+
+/* ---- Hero-point markers (in 3D layer) ------------------------------------ */
+#hero-layer { position: fixed; inset: 0; z-index: 15; pointer-events: none; }
+.hero-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity 0.25s var(--ease);
+}
+.hero-dot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--marker);
+  box-shadow: 0 0 0 4px rgba(46, 196, 182, 0.22), 0 0 14px rgba(46, 196, 182, 0.7);
+  flex: 0 0 auto;
+}
+.hero-marker .hero-caption {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  font-size: 15px;
+  white-space: nowrap;
+  color: var(--ink);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
+}
+.hero-marker:hover .hero-caption { opacity: 1; transform: translateX(0); }
+
+/* ---- Hero-point description card ----------------------------------------- */
+#hero-card {
+  position: fixed;
+  left: max(24px, env(safe-area-inset-left));
+  top: 50%;
+  transform: translateY(-50%) translateX(-24px);
+  z-index: 28;
+  width: min(360px, calc(100vw - 48px));
+  max-height: 72vh;
+  overflow-y: auto;
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 26px 28px;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease), transform 0.4s var(--ease);
+}
+#hero-card.open {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+.hero-card-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -1px;
+  line-height: 1.12;
+  margin: 0 30px 4px 0; /* room for the × */
+}
+.hero-card-icon {
+  display: inline-flex;
+  vertical-align: -3px;
+  margin-right: 9px;
+  color: var(--sand);
+}
+.hero-card-sub {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sand);
+  margin-bottom: 14px;
+}
+.hero-card-desc {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  margin: 0 0 16px;
+}
+.hero-card-desc.hero-card-placeholder { opacity: 0.6; font-style: italic; }
+.hero-card-specs { margin: 0; display: grid; gap: 8px; }
+.hero-card-specs > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+.hero-card-specs dt { color: var(--ink-muted); font-size: 14px; margin: 0; }
+.hero-card-specs dd { color: var(--ink); font-size: 14px; margin: 0; text-align: right; }
+
+/* Bottom-anchored variant of the HUD card (same styling, slides up from below). */
+#hero-card.bottom {
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: max(80px, calc(env(safe-area-inset-bottom) + 76px));
+  width: min(520px, calc(100vw - 40px));
+  transform: translateX(-50%) translateY(24px);
+}
+#hero-card.bottom.open { transform: translateX(-50%) translateY(0); }
+
+/* ---- Disclaimer footer button -------------------------------------------- */
+#disclaimer-open {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 20;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: color 0.3s var(--ease), border-color 0.3s var(--ease);
+}
+#disclaimer-open:hover { color: var(--ink); border-color: rgba(229, 217, 199,0.5); }
+
+/* ---- Modals (disclaimer + unsupported) ----------------------------------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(50, 32, 17, 0.6);  /* espresso overlay, per brand */
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.modal-card {
+  position: relative;
+  max-width: 560px;
+  width: 100%;
+  max-height: 84vh;
+  overflow-y: auto;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 34px 36px;
+}
+.modal-card h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -1px;
+  margin: 0 0 14px;
+}
+.modal-card h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;  /* eyebrow-style section labels */
+  margin: 20px 0 6px;
+  color: var(--sand);
+}
+.modal-card p, .modal-card li {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+.modal-card strong { color: var(--ink); }
+.modal-close {
+  position: absolute;
+  top: 14px; right: 16px;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.modal-close:hover { color: var(--ink); }
+
+/* ---- Loading veil -------------------------------------------------------- */
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(50, 32, 17, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 1;
+  transition: opacity 0.45s var(--ease); /* soft cross-fade between scenes */
+}
+.spinner {
+  width: 40px; height: 40px;
+  border: 2px solid rgba(239, 234, 226,0.2);
+  border-top-color: var(--sand);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#loading-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  color: var(--ink);
+}
+
+/* ---- Anchored hero card (pinned to the 3D point, tracks the camera) ------ */
+#hero-card-anchored {
+  position: fixed;
+  z-index: 22;
+  width: 256px;
+  max-height: 60vh;
+  overflow-y: auto;
+  transform: translateY(-50%);
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.3s var(--ease);
+}
+#hero-card-anchored.show { opacity: 1; }
+/* little tail pointing left toward the dot */
+#hero-card-anchored::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 7px solid transparent;
+  border-right-color: var(--line);
+}
+#hero-card-anchored .hero-card-title { font-size: 20px; letter-spacing: -0.5px; margin-right: 26px; }
+#hero-card-anchored .hero-card-desc { font-size: 14.5px; }
+
+/* ---- Authoring crosshair (only shown with ?author in the URL) ------------ */
+#author-crosshair {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  pointer-events: none;
+  width: 26px;
+  height: 26px;
+}
+#author-crosshair::before,
+#author-crosshair::after {
+  content: '';
+  position: absolute;
+  background: var(--marker);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+}
+#author-crosshair::before { left: 50%; top: 0; width: 1px; height: 100%; transform: translateX(-50%); }
+#author-crosshair::after { top: 50%; left: 0; height: 1px; width: 100%; transform: translateY(-50%); }
+
+/* ---- Mobile ------------------------------------------------------------- */
+@media (max-width: 720px) {
+  #rail {
+    top: auto;
+    bottom: max(66px, calc(env(safe-area-inset-bottom) + 62px));
+    right: 12px;
+    left: 12px;
+    transform: none;
+    flex-direction: row;
+    width: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rail-item { flex: 0 0 auto; min-width: 148px; }
+  .rail-item:hover { transform: none; }
+  #drawer {
+    bottom: max(150px, calc(env(safe-area-inset-bottom) + 148px));
+    width: calc(100vw - 24px);
+  }
+  .brand-mark { font-size: 21px; }
+
+  /* Card becomes a bottom sheet on small screens. */
+  #hero-card {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 56vh;
+    transform: translateY(24px);
+  }
+  #hero-card.open { transform: translateY(0); }
+}

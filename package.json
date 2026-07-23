@@ -1,0 +1,20 @@
+{
+  "name": "morisot-jftr-demo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Morisot Studio — interactive 3D Gaussian splat demo reel for Just For The Record (three scenes: synths, Studio E, common room).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "playcanvas": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0"
+  }
+}

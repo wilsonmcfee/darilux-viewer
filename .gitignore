@@ -1,0 +1,11 @@
+node_modules
+dist
+*.local
+.DS_Store
+.vite
+
+# Splat source files are large — keep raw captures out of git.
+# Only the COMPRESSED, web-ready splats in public/splat/ (small .sog/.spz) should be committed.
+*.ply
+*.psht
+*.spz.original

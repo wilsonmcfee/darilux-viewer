@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#17100a" />
+    <title>Morisot Studio — Just For The Record</title>
+    <meta
+      name="description"
+      content="Interactive 3D captures of Just For The Record — explore the rooms and gear in your browser. No app required."
+    />
+
+    <!-- JFTR brand typeface: Karla (400 body, 700/800 display). Preconnect so the fonts arrive fast. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Karla:ital,wght@0,400;0,700;0,800;1,400&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- The splat renders here. Everything else is HTML/CSS layered on top. -->
+    <canvas id="viewer"></canvas>
+
+    <!-- Hero-point markers are injected into this layer and positioned each frame. -->
+    <div id="hero-layer" aria-hidden="true"></div>
+
+    <!-- Brand mark, top-left. -->
+    <header id="brand">
+      <div class="brand-mark">Morisot&nbsp;Studio</div>
+      <div class="brand-sub">for Just&nbsp;For&nbsp;The&nbsp;Record</div>
+    </header>
+
+    <!-- Persistent demo rail, right side. Populated by ui.ts from demos.ts. -->
+    <nav id="rail" aria-label="Choose a demo"></nav>
+
+    <!-- Info drawer, bottom-left. Title + scale + description + hero-point menu. -->
+    <section id="drawer" aria-live="polite"></section>
+
+    <!-- Hero-point description card. Opens when a dot or a menu item is clicked. -->
+    <aside id="hero-card" class="hidden" role="dialog" aria-label="Gear details">
+      <button id="hero-card-close" class="modal-close" type="button" aria-label="Close">×</button>
+      <div id="hero-card-body"></div>
+    </aside>
+
+    <!-- Anchored variant: a small callout pinned to the hero's 3D point.
+         Positioned each frame by the hero-point manager. -->
+    <aside id="hero-card-anchored" class="hidden" role="dialog" aria-label="Gear details">
+      <button id="hero-card-anchored-close" class="modal-close" type="button" aria-label="Close">×</button>
+      <div id="hero-card-anchored-body"></div>
+    </aside>
+
+    <!-- Small footer control: opens the disclaimer. -->
+    <button id="disclaimer-open" type="button">About this demo</button>
+
+    <!-- Loading veil shown while a splat streams in. -->
+    <div id="loading" class="hidden">
+      <div class="spinner" role="status" aria-label="Loading scene"></div>
+      <div id="loading-label">Loading…</div>
+    </div>
+
+    <!-- Disclaimer modal (content set in ui.ts; copy lives in DISCLAIMER-DRAFT.md). -->
+    <div id="disclaimer" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="disclaimer-title">
+      <div class="modal-card">
+        <button id="disclaimer-close" class="modal-close" type="button" aria-label="Close">×</button>
+        <div id="disclaimer-body"></div>
+      </div>
+    </div>
+
+    <!-- Fallback overlay when the device can't render splats at all. -->
+    <div id="unsupported" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <h2>This experience needs a modern browser</h2>
+        <p>
+          These interactive captures render with WebGL2 / WebGPU. Your current browser
+          doesn't support them — most often this happens inside an in-app browser
+          (opening the link from a chat app) or on an older device.
+        </p>
+        <p><strong>Try:</strong> open this link directly in Chrome or Safari, or update to a recent version.</p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
