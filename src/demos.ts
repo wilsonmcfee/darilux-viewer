@@ -36,6 +36,12 @@ export interface HeroPoint {
   caption: string;        // floating label next to the 3D marker
   pose: Pose;             // where the fly-in lands
   anchor?: [number, number, number]; // 3D point the marker pins to (default: pose.target)
+  /**
+   * Marker style. 'info' renders a slightly larger circle with an enclosed
+   * question mark — for explanatory notes about the capture itself rather
+   * than featured gear. Behaves exactly like a normal hero point otherwise.
+   */
+  variant?: 'info';
 
   // ---- Description card (shown when the dot or the menu item is clicked) ----
   icon?: string;          // small glyph beside the card title (e.g. 'speaker')
@@ -46,13 +52,14 @@ export interface HeroPoint {
   // ---- Auto-orbit behavior once the fly-in lands (optional) ----
   //   mode 'sway' (default) = gentle pendulum around the front arc
   //   mode 'spin'           = continuous full 360° turntable (central fixtures)
+  //   mode 'none'           = hold still — no auto motion (visitor can still orbit)
   //   direction -1          = start the sway / spin in the opposite direction
   //   pivot 'anchor'        = orbit around the dot's 3D point (default 'view' = the pose target)
   //   speed / ease / amplitude = optional per-hero overrides of the sway feel
   //     (defaults: speed 7.5°/s, ease 6°, amplitude ±30°). Lower speed + higher
   //     ease = smoother, gentler turnaround.
   autoOrbit?: {
-    mode?: 'sway' | 'spin';
+    mode?: 'sway' | 'spin' | 'none';
     direction?: 1 | -1;
     pivot?: 'anchor' | 'view';
     speed?: number;
@@ -220,9 +227,22 @@ export const DEMOS: Demo[] = [
         label: 'Dolby Atmos Monitors',
         caption: 'PMC 6-2 · Immersive monitoring',
         icon: 'speaker',
-        pose: { position: [2.229, -2.646, 2.193], target: [1.844, -2.341, 5.623], fov: 75 },
-        anchor: [2.009, -1.972, 4.425],
+        pose: { position: [-0.573, 5.828, -0.402], target: [-0.54, 4.666, 2.862], fov: 75 },
+       anchor: [-0.409, 1.72, 6.852],
         description: `Studio E's Atmos bed runs on PMC 6-2 monitors — a three-way active design PMC released in 2021, purpose-built for rooms where immersive mixes have to translate exactly. Twin 6" woofers, a 2" midrange, and a 1" tweeter are each driven by their own 400W Class-D amplifier, with PMC's ATL bass-loading holding tonal balance steady from quiet reference levels up to 109dB. The result: what you hear at the desk is what ships.`,
+      },
+      {
+        id: 'capture-quality',
+        label: 'Why does it look like that?',
+        caption: 'Why does it look like that?',
+        variant: 'info',
+        pose: { position: [-1.535, 4.29, 2.127], target: [1.418, 5.373, 0.672], fov: 75 },
+        anchor: [9.543, 5.104, -4.374],
+        autoOrbit: { mode: 'none' }, // hold the framing still — this one's for reading
+        description:
+          `The biggest advantage of Gaussian Splatting is also in some ways its biggest issue. It all hinges upon method of capture. If an iPhone is capturing a space in low light, due to hardware constraints (such as size of lens and FOV) details can become soft and fuzzy, which the compiler translates exactly as they're presented — creating soft floating gaussians and inconsistencies in some walls and angles.<br><br>` +
+          `The fix? A higher quality method of capture. Final captures will be done with a Sony ZV-E1 using a 20mm lens, meaning impeccable capture of details even at low light, with a much wider field of view to gather more visual information. That way you preserve details even after compiling/compression. While there may still be some minor gaussian artifacts, they will be hardly noticeable compared to the iPhone capture. ` +
+          `<a class="hero-card-link" href="https://superspl.at/scene/b149b2b0" target="_blank" rel="noopener">Here is an example using a similar camera setup</a>.`,
       },
     ],
   },
@@ -242,9 +262,9 @@ export const DEMOS: Demo[] = [
     // floater-inflated (~31 units) so auto-framing fails; explicit pose instead.
     // REFINE with __logPose() for the real shot.
     initialPose: {
-      position: [5.033,-0.679,24.31],
-      target: [3.95,0.031,16.449],
-      fov: 60,
+     position: [17.423, 1.43, -3.132], 
+     target: [9.492, 1.44, -3.887],
+     fov: 60
     },
     heroPoints: [
       // TODO: author each — fly + __logPose() for `pose`, crosshair (?author) +

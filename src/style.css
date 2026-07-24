@@ -108,8 +108,15 @@ button { font-family: var(--sans); }
   padding: 6px 14px;
   cursor: pointer;
   transition: color 0.3s var(--ease), border-color 0.3s var(--ease);
+  /* A quieter cousin of the hero dots' ping — slower, fainter, smaller reach. */
+  animation: pulse-soft 3.4s ease-out infinite;
 }
-#disclaimer-open:hover { color: var(--ink); border-color: var(--ink); }
+#disclaimer-open:hover { color: var(--ink); border-color: var(--ink); animation: none; }
+@keyframes pulse-soft {
+  0%   { box-shadow: 0 0 0 0 rgba(184, 57, 46, 0.5); }
+  65%  { box-shadow: 0 0 0 9px rgba(184, 57, 46, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(184, 57, 46, 0); }
+}
 
 /* ---- Sections ------------------------------------------------------------- */
 .section { padding: 80px 0 100px; }
@@ -242,11 +249,23 @@ button { font-family: var(--sans); }
   font-size: 12px;
   letter-spacing: 0.05em;
   color: var(--ink-2);
-  margin-bottom: 66px;
+  /* The controls guide sits almost directly beneath these three points; the
+     guide itself carries the big separation to the content that follows. */
+  margin-bottom: 14px;
 }
 .viewer-caption b { color: var(--ink); font-weight: 600; }
 
 .block-gap { height: 80px; }
+
+/* ---- Controls guide (above the about/detail content, per room) -------------- */
+.guide-title {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(20px, 2.6vw, 28px);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 66px;
+}
 
 /* ---- THE STAGE — the shared live viewport ----------------------------------
    Moved by main.ts into whichever .viewer-window is live. Everything inside
@@ -316,6 +335,19 @@ button { font-family: var(--sans); }
   border-radius: 50%;
   border: 1px solid var(--accent);
   animation: ping 2.6s ease-out infinite;
+}
+/* 'info' variant — a ?-circle, 20% larger, for notes about the capture itself. */
+.hero-dot-info {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 16, 12, 0.6); /* no center dot — the ? takes its place */
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--shell-ink);
 }
 .hero-marker .hero-caption {
   white-space: nowrap;
@@ -402,39 +434,53 @@ button { font-family: var(--sans); }
 }
 #hero-card.bottom.open { transform: translateX(-50%) translateY(0); }
 
+/* Studio E's card: 20% wider and thinner — a low landscape strip. */
+#hero-card.bottom[data-demo="studio-e"] {
+  width: min(624px, calc(100% - 36px));
+  max-height: 46%;
+  padding: 18px 26px;
+}
+
+/* Links inside hero descriptions (e.g. the capture-quality example scene). */
+.hero-card-link {
+  color: #e08a3c;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.hero-card-link:hover { color: #f0a45e; }
+
 /* ---- Anchored hero card (pinned to the 3D point, tracks the camera) -------- */
 #hero-card-anchored {
   position: absolute;
   z-index: 22;
-  width: min(256px, calc(100% - 32px)); /* never wider than the window allows */
-  max-height: 70%;
+  width: min(218px, calc(100% - 32px)); /* never wider than the window allows */
+  max-height: 60%;
   overflow-y: auto;
-  transform: translateY(-50%);
   background: var(--glass-strong);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
   border: 1px solid var(--shell-line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px 20px;
+  padding: 15px 17px;
   color: var(--shell-ink);
   opacity: 0;
   pointer-events: auto;
   transition: opacity 0.3s var(--ease);
 }
 #hero-card-anchored.show { opacity: 1; }
-/* little tail pointing left toward the dot */
+/* little tail pointing up toward the dot (the card rests beneath it) */
 #hero-card-anchored::before {
   content: "";
   position: absolute;
-  left: -7px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 50%;
+  top: -14px;
+  transform: translateX(-50%);
   border: 7px solid transparent;
-  border-right-color: var(--shell-line);
+  border-bottom-color: var(--shell-line);
 }
-#hero-card-anchored .hero-card-title { font-size: 19px; margin-right: 26px; }
-#hero-card-anchored .hero-card-desc { font-size: 13.5px; }
+#hero-card-anchored .hero-card-title { font-size: 16px; margin-right: 24px; }
+#hero-card-anchored .hero-card-desc { font-size: 12px; }
 
 /* ---- Loading veil (inside the window) --------------------------------------- */
 #loading {
@@ -740,6 +786,7 @@ button { font-family: var(--sans); }
   .synth-grid { grid-template-columns: 1fr; gap: 32px; }
   .viewer-caption { margin-bottom: 48px; }
   .btn-dark { margin-left: 0; }
+  .guide-title { display: none; } /* WASD/Q/E is keyboard-only — meaningless on touch */
   .ratio-tall { width: 100%; } /* single column — let the tall frame fill it */
 
   /* Give the live windows a little more height to move around in. */
@@ -775,5 +822,6 @@ button { font-family: var(--sans); }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-dot::after { animation: none; }
+  #disclaimer-open { animation: none; }
   html { scroll-behavior: auto; }
 }

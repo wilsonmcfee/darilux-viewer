@@ -89,6 +89,7 @@ export class OrbitFlyCamera {
   // so the visitor can look around a piece of gear but not wander off it.
   private heroMode = false;
   private heroSpin = false;      // true = continuous full 360° turntable (no sway, no yaw clamp)
+  private heroStill = false;     // true = no auto motion at all (mode 'none')
   private heroMinDistance = 0.5;
   private heroMaxDistance = 6;
   private heroPitchMin = -35;
@@ -156,7 +157,7 @@ export class OrbitFlyCamera {
     pose: Pose,
     duration = 1.6,
     opts?: {
-      mode?: 'sway' | 'spin';
+      mode?: 'sway' | 'spin' | 'none';
       direction?: number;
       pivot?: [number, number, number];
       speed?: number;
@@ -175,6 +176,7 @@ export class OrbitFlyCamera {
     this.heroMaxDistance = goal.distance * 1.8;
     this.heroCenterYaw = goal.yaw; // sway + orbit limits are measured from here
     this.heroSpin = opts?.mode === 'spin';
+    this.heroStill = opts?.mode === 'none';
     this.autoOrbitDir = opts?.direction === -1 ? -1 : 1;
     // Per-hero auto-orbit feel (falls back to defaults).
     this.autoOrbitSpeed = opts?.speed ?? DEFAULT_ORBIT.speed;
@@ -248,6 +250,7 @@ export class OrbitFlyCamera {
     // visitor has been idle for a moment. Any interaction pauses it (see lastInteract).
     if (
       this.heroMode &&
+      !this.heroStill && // mode 'none': hold the framing — no auto motion
       !this.flying &&
       this.pressedKeys.size === 0 &&
       performance.now() - this.lastInteract > this.autoOrbitDelay

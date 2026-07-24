@@ -241,6 +241,11 @@ function boot(): void {
     // The stage is reparented between differently-sized windows, so a
     // ResizeObserver (which also fires on reparent) keeps the buffer in sync.
     const ro = new ResizeObserver(() => {
+      // When the stage is parked in the hidden dock (viewer closed) it
+      // measures 0×0. Resizing the swapchain to zero creates invalid WebGPU
+      // textures and every subsequent frame submits an invalid command
+      // buffer — the console spam that drags the whole page down. Skip it.
+      if (!stage.clientWidth || !stage.clientHeight) return;
       app?.resizeCanvas(stage.clientWidth, stage.clientHeight);
       // The viewport shape changed (rotation / reparenting into another
       // window) — re-apply the camera so its aspect-compensated fov tracks it.
@@ -273,6 +278,7 @@ function boot(): void {
       document.getElementById('stage-dock')!.appendChild(stage);
       return;
     }
+    app!.autoRender = true; // wake the renderer (paused while no viewer is live)
     app!.resizeCanvas(stage.clientWidth, stage.clientHeight);
 
     await loadDemo(demo);
@@ -288,6 +294,9 @@ function boot(): void {
     pendingHero = null;
     ui.setLive(null);
     ui.hideLoading();
+    // Pause rendering while the stage is parked — there's nothing to draw,
+    // and it keeps the (0-sized) canvas from ever reaching the GPU.
+    if (app) app.autoRender = false;
     document.getElementById('stage-dock')!.appendChild(document.getElementById('stage')!);
   }
 
@@ -332,7 +341,7 @@ function boot(): void {
       ui.showAnchoredCard(hero);
       heroes!.setActiveAnchor(hero.anchor ?? hero.pose.target);
     } else {
-      ui.showHeroCard(hero, cardStyle === 'hud-bottom' ? 'bottom' : 'left');
+      ui.showHeroCard(hero, cardStyle === 'hud-bottom' ? 'bottom' : 'left', activeDemo?.id);
     }
   }
 
@@ -396,7 +405,14 @@ function boot(): void {
     currentAsset = asset;
 
     asset.once('load', () => {
-      if (activeDemo !== demo) return; // visitor entered another window mid-load
+      if (activeDemo !== demo) {
+        // Superseded mid-load (visitor already switched scenes). The decoded
+        // splat resource just landed in memory — free it, or every rapid
+        // scene switch strands ~half a million splats and the site crawls.
+        app!.assets.remove(asset);
+        asset.unload();
+        return;
+      }
       const entity = new Entity(demo.id);
       // SuperSplat / splat-transform exports are flipped; the starter corrects
       // with a 180° roll. Without this the scene renders upside-down.
@@ -438,6 +454,11 @@ function boot(): void {
     });
 
     asset.once('error', (err: string) => {
+      if (activeDemo !== demo) {
+        app!.assets.remove(asset);
+        asset.unload();
+        return;
+      }
       console.error(`[darilux] failed to load ${url}:`, err);
       ui.showLoading(
         `Couldn't load ${demo.title}. Check public/${demo.src} exists — see README.`,

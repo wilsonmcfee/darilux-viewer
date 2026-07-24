@@ -51,7 +51,12 @@ export class HeroPointManager {
       const a = hero.anchor ?? hero.pose.target;
       const el = document.createElement('div');
       el.className = 'hero-marker';
-      el.innerHTML = `<span class="hero-dot"></span><span class="hero-caption">${hero.caption}</span>`;
+      // 'info' variant: a larger ?-circle for notes about the capture itself.
+      const dot =
+        hero.variant === 'info'
+          ? '<span class="hero-dot hero-dot-info">?</span>'
+          : '<span class="hero-dot"></span>';
+      el.innerHTML = `${dot}<span class="hero-caption">${hero.caption}</span>`;
       el.addEventListener('click', () => this.onSelect?.(hero));
       this.layer.appendChild(el);
       this.markers.push({ hero, el, anchor: new Vec3(a[0], a[1], a[2]) });
@@ -97,14 +102,14 @@ export class HeroPointManager {
     const w = card.offsetWidth;
     const h = card.offsetHeight;
     const margin = 8;
-    // Sit to the right of the dot; clamp so the card never leaves the viewer
-    // window (the layer overlays the canvas exactly, so its size is the window's).
+    // Rest BENEATH the dot, horizontally centered on it; clamp so the card
+    // never leaves the viewer window (the layer overlays the canvas exactly).
     const boundsW = this.layer.clientWidth || window.innerWidth;
     const boundsH = this.layer.clientHeight || window.innerHeight;
-    let x = this.screen.x + 20;
-    let y = this.screen.y;
+    let x = this.screen.x - w / 2;
+    let y = this.screen.y + 22; // clear the dot; the tail points back up at it
     x = Math.min(Math.max(x, margin), boundsW - w - margin);
-    y = Math.min(Math.max(y, h / 2 + margin), boundsH - h / 2 - margin);
+    y = Math.min(Math.max(y, margin), boundsH - h - margin);
     card.style.left = `${x}px`;
     card.style.top = `${y}px`;
   }

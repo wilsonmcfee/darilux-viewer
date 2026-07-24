@@ -150,11 +150,12 @@ export class UI {
     this.anchoredTimer = window.setTimeout(() => card.classList.add('hidden'), 320);
   }
 
-  showHeroCard(hero: HeroPoint, placement: 'left' | 'bottom' = 'left'): void {
+  showHeroCard(hero: HeroPoint, placement: 'left' | 'bottom' = 'left', demoId = ''): void {
     const card = $('hero-card');
     if (this.cardTimer) window.clearTimeout(this.cardTimer);
     $('hero-card-body').innerHTML = this.buildCardHTML(hero);
     card.classList.toggle('bottom', placement === 'bottom'); // left panel vs bottom bar
+    card.dataset.demo = demoId; // lets CSS size the card per demo
     card.classList.remove('hidden');
     requestAnimationFrame(() => card.classList.add('open')); // trigger slide-in
   }
