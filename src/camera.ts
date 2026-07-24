@@ -67,6 +67,17 @@ export class OrbitFlyCamera {
   private flyYawDelta = 0;
   private onArrive?: () => void;
 
+  // Aspect compensation. Pose fov values are VERTICAL degrees, authored in a
+  // window of this aspect (width / height, set per demo from demos.ts). When
+  // the live canvas is NARROWER than this (e.g. the 16:9 windows becoming 4:3
+  // on mobile), the same vertical fov crops the sides of the authored framing.
+  // apply() widens the effective vertical fov so the HORIZONTAL coverage stays
+  // what was authored. Wider-than-reference viewports are left alone (extra
+  // side coverage is harmless). s.fov itself is never mutated, so __logPose()
+  // and authored poses stay in the reference space.
+  private refAspect = 16 / 9;
+  private maxEffectiveFov = 115; // vertical degrees — distortion guard
+
   // Tuning.
   private rotSpeed = 0.28;   // deg per pixel
   private zoomSpeed = 0.0016;
@@ -112,6 +123,18 @@ export class OrbitFlyCamera {
       '[darilux] camera — drag: orbit · right-drag / Shift+wheel: pan · wheel: zoom · ' +
         'WASD + Q/E: fly (Shift = faster) · run __logPose() to capture a pose',
     );
+  }
+
+  /** Set the aspect the current demo's poses were authored at (see refAspect). */
+  setReferenceAspect(aspect: number): void {
+    this.refAspect = aspect > 0 ? aspect : 16 / 9;
+    this.apply();
+  }
+
+  /** Re-apply the camera (call after the canvas resizes or is reparented, so
+      the aspect-compensated fov tracks the new viewport shape). */
+  refresh(): void {
+    this.apply();
   }
 
   /** Snap instantly to a pose (used when a new demo loads). */
@@ -315,7 +338,24 @@ export class OrbitFlyCamera {
     const z = target.z + distance * cp * Math.cos(yaw * RAD);
     this.cam.setPosition(x, y, z);
     this.cam.lookAt(target);
-    if (this.cam.camera) this.cam.camera.fov = fov;
+    if (this.cam.camera) this.cam.camera.fov = this.effectiveFov(fov);
+  }
+
+  /**
+   * Aspect-compensated vertical fov. On viewports narrower than the reference
+   * aspect, widen the vertical fov so the horizontal field matches what the
+   * authored (reference-aspect) framing showed:
+   *   hFov/2 = atan(tan(vFov/2) · refAspect)      — authored horizontal half-angle
+   *   vFov'/2 = atan(tan(hFov/2) / liveAspect)    — vertical that reproduces it
+   */
+  private effectiveFov(fov: number): number {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    if (!w || !h) return fov;
+    const aspect = w / h;
+    if (aspect >= this.refAspect) return fov;
+    const hHalf = Math.atan(Math.tan((fov * RAD) / 2) * this.refAspect);
+    return Math.min(2 * Math.atan(Math.tan(hHalf) / aspect) * DEG, this.maxEffectiveFov);
   }
 
   private interrupt(): void {

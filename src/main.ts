@@ -34,11 +34,18 @@ import { DEMOS, type Demo, type HeroPoint, type Pose } from './demos';
 import { createDevice, canRender } from './device';
 import { OrbitFlyCamera } from './camera';
 import { HeroPointManager } from './heropoints';
+import { SplatPicker } from './splatpick';
 import { UI } from './ui';
 
 function boot(): void {
   const stage = document.getElementById('stage') as HTMLElement;
   const canvas = document.getElementById('viewer') as HTMLCanvasElement;
+
+  // Authoring mode (?author / #author): crosshair, pose panel, splat-snap
+  // anchor picking. The picker decodes each scene's splat centers on the CPU —
+  // author-only cost, never paid by visitors.
+  const authorMode = /author/i.test(location.search + location.hash);
+  const picker = new SplatPicker();
 
   // ---- App state (the app itself is created lazily on first Enter) ---------
   let app: Application | null = null;
@@ -95,13 +102,118 @@ function boot(): void {
     (window as unknown as { __logPose: () => void }).__logPose = () => controller!.logPose();
     (window as unknown as { __logAnchor: () => void }).__logAnchor = () => controller!.logAnchor();
 
-    // Authoring aid: add ?author (or #author) to the URL to show a center crosshair.
-    // __logAnchor() captures the point under this crosshair. Hidden for visitors.
-    if (/author/i.test(location.search + location.hash)) {
+    // Authoring aid: add ?author (or #author) to the URL for authoring mode —
+    // a center crosshair plus an on-screen panel with a live pose readout and
+    // Copy pose / Copy anchor buttons (no console needed; works on touch).
+    // The console helpers (__logPose / __logAnchor) still work as a fallback.
+    if (authorMode) {
       const cross = document.createElement('div');
       cross.id = 'author-crosshair';
       stage.appendChild(cross);
-      console.info('[darilux] authoring mode — aim the crosshair at a spot, run __logAnchor() for the dot position');
+
+      const panel = document.createElement('div');
+      panel.id = 'author-panel';
+      panel.innerHTML =
+        `<div id="author-readout"></div>
+         <div class="author-btns">
+           <button type="button" id="author-copy-pose">Copy pose</button>
+           <button type="button" id="author-snap-anchor">Snap anchor</button>
+           <button type="button" id="author-copy-anchor">Free anchor</button>
+         </div>`;
+      stage.appendChild(panel);
+
+      // The last splat-snapped pick, shown as a live dot so you can verify it
+      // sticks to the surface while orbiting/zooming (no parallax slide).
+      let pickedWorld: Vec3 | null = null;
+      const pickedDot = document.createElement('div');
+      pickedDot.id = 'author-picked';
+      stage.appendChild(pickedDot);
+      const screenTmp = new Vec3();
+      app.on('update', () => {
+        if (!pickedWorld || !camera.camera) {
+          pickedDot.style.display = 'none';
+          return;
+        }
+        camera.camera.worldToScreen(pickedWorld, screenTmp);
+        pickedDot.style.display = screenTmp.z > 0 ? '' : 'none';
+        pickedDot.style.left = `${screenTmp.x}px`;
+        pickedDot.style.top = `${screenTmp.y}px`;
+      });
+
+      const readout = panel.querySelector('#author-readout') as HTMLElement;
+      const fmt = (v: number[]) => `[${v.join(', ')}]`;
+      // Live readout — cheap, so just poll. getPose() is side-effect free.
+      window.setInterval(() => {
+        const p = controller!.getPose();
+        readout.textContent =
+          `pos ${fmt(p.position)}\ntgt ${fmt(p.target)}\nfov ${p.fov}`;
+      }, 150);
+
+      // Copy → clipboard when available (localhost/https), console otherwise.
+      const copy = async (snippet: string, btn: HTMLButtonElement) => {
+        let ok = true;
+        try {
+          await navigator.clipboard.writeText(snippet);
+        } catch {
+          ok = false;
+          console.log('[darilux] copy blocked — paste from here:\n' + snippet);
+        }
+        const original = btn.textContent;
+        btn.textContent = ok ? 'Copied ✓' : 'See console';
+        window.setTimeout(() => (btn.textContent = original), 1200);
+      };
+      panel.querySelector('#author-copy-pose')!.addEventListener('click', () => {
+        const p = controller!.getPose();
+        void copy(
+          `pose: { position: ${fmt(p.position)}, target: ${fmt(p.target)}, fov: ${p.fov} },`,
+          panel.querySelector('#author-copy-pose') as HTMLButtonElement,
+        );
+      });
+      panel.querySelector('#author-copy-anchor')!.addEventListener('click', () => {
+        // "Free anchor": the raw orbit target (screen-center, but at the orbit
+        // pivot's depth — may float off the surface). Prefer Snap anchor.
+        const p = controller!.getPose();
+        void copy(
+          `anchor: ${fmt(p.target)},`,
+          panel.querySelector('#author-copy-anchor') as HTMLButtonElement,
+        );
+      });
+
+      // ---- Splat-snapped anchor picking ------------------------------------
+      // Casts a ray and snaps to the nearest actual splat center, so the
+      // anchor sits ON the captured surface. A dot authored this way cannot
+      // parallax-slide across the gear when the visitor zooms or orbits.
+      const PICK_PX = 8; // screen-space pick tolerance
+      const snapBtn = panel.querySelector('#author-snap-anchor') as HTMLButtonElement;
+      const pickAt = (cssX: number, cssY: number): void => {
+        const cc = camera.camera;
+        if (!cc || !currentSplat) return;
+        if (!picker.ready) {
+          snapBtn.textContent = 'Decoding…';
+          window.setTimeout(() => (snapBtn.textContent = 'Snap anchor'), 1200);
+          return;
+        }
+        const far = cc.screenToWorld(cssX, cssY, cc.farClip);
+        const origin = camera.getPosition();
+        const dir = new Vec3().sub2(far, origin).normalize();
+        const tanRadius =
+          Math.tan((cc.fov * Math.PI) / 360) * ((2 * PICK_PX) / Math.max(canvas.clientHeight, 1));
+        const hit = picker.pick(origin, dir, tanRadius, currentSplat.getWorldTransform());
+        if (!hit) return;
+        pickedWorld = new Vec3(hit[0], hit[1], hit[2]);
+        void copy(`anchor: [${hit.join(', ')}],`, snapBtn);
+      };
+      // Button: pick whatever is under the center crosshair.
+      snapBtn.addEventListener('click', () =>
+        pickAt(canvas.clientWidth / 2, canvas.clientHeight / 2),
+      );
+      // Double-click / double-tap: pick under the cursor (doesn't fight orbit-drag).
+      canvas.addEventListener('dblclick', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        pickAt(e.clientX - rect.left, e.clientY - rect.top);
+      });
+
+      console.info('[darilux] authoring mode — Copy pose for framings; Snap anchor (or double-click) pins to the splat surface');
     }
 
     // ---- Frame loop ----------------------------------------------------------
@@ -130,6 +242,9 @@ function boot(): void {
     // ResizeObserver (which also fires on reparent) keeps the buffer in sync.
     const ro = new ResizeObserver(() => {
       app?.resizeCanvas(stage.clientWidth, stage.clientHeight);
+      // The viewport shape changed (rotation / reparenting into another
+      // window) — re-apply the camera so its aspect-compensated fov tracks it.
+      controller?.refresh();
     });
     ro.observe(stage);
 
@@ -251,6 +366,10 @@ function boot(): void {
   async function loadDemo(demo: Demo): Promise<void> {
     activeDemo = demo;
 
+    // Poses are authored at this demo's desktop window aspect; the camera
+    // compensates fov whenever the live viewport is narrower (see camera.ts).
+    controller!.setReferenceAspect(demo.refAspect ?? 16 / 9);
+
     exitCloseupUI();
     ui.showLoading(`Loading ${demo.title}…`);
     heroes!.setVisible(false);
@@ -265,6 +384,12 @@ function boot(): void {
     // paths resolve against the Vite base so they work under /<repo>/ on Pages.
     const isAbsolute = /^https?:\/\//i.test(demo.src);
     const url = isAbsolute ? demo.src : `${import.meta.env.BASE_URL}${demo.src}`;
+    // Authoring: decode this scene's splat centers for snap-picking (CPU copy,
+    // author mode only — visitors never pay this cost).
+    if (authorMode) {
+      picker.load(url).catch((e) => console.warn('[darilux] splat pick data unavailable:', e));
+    }
+
     // filename hints the loader which parser to use (SOGS bundle = meta.json).
     const filename = url.split('/').pop() || 'meta.json';
     const asset = new Asset(demo.id, 'gsplat', { url, filename });

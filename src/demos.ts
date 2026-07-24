@@ -88,6 +88,15 @@ export interface Demo {
    *   'anchored' — small callout pinned to the hero's 3D point, tracking the camera
    */
   cardStyle?: 'hud' | 'hud-bottom' | 'anchored';
+  /**
+   * The viewer-window aspect ratio (width / height) this demo's poses were
+   * AUTHORED at — i.e. the window's desktop CSS aspect. Pose `fov` is vertical,
+   * so on a narrower viewport (e.g. the 16:9 windows becoming 4:3 on mobile)
+   * the same fov silently crops the sides. The camera compensates: whenever the
+   * live aspect is narrower than this reference, it widens the vertical fov to
+   * preserve the authored HORIZONTAL coverage. Defaults to 16/9.
+   */
+  refAspect?: number;
 }
 
 export const DEMOS: Demo[] = [
@@ -99,13 +108,17 @@ export const DEMOS: Demo[] = [
     blurb:
       'A tight capture of five synthesizers. Tap a hero point to fly in and read ' +
       'each instrument close-up — the level of detail a single object can hold.',
-    src: 'splat/synths/meta.json', // SOGS bundle (meta.json + .webp textures)
+    src: 'splat/synths/meta.json', // SOGS bundle ("Synth Heroes Rev" export)
     cardStyle: 'hud-bottom', // stationary HUD card, bottom-center
+    refAspect: 3.4 / 5.5, // keep in sync with .ratio-tall in style.css
     // Real pose authored in SuperSplat and carried over from the starter.
+    // Depth illusion: rest wide-ish at 80, then every hero fly-in eases the fov
+    // out to 120 while the camera moves in — a dolly-zoom feel. Closing the
+    // card flies home and reverses it. (flyTo lerps fov, so no code needed.)
     initialPose: {
       position: [0.432,0.536,-4.077],
       target: [0.237,0.385,-1.769],
-      fov: 81,
+      fov: 80,
     },
     heroPoints: [
       // Authored in SuperSplat via __logPose(). Each target sits on the instrument,
@@ -114,8 +127,8 @@ export const DEMOS: Demo[] = [
         id: 'moog-sub-phatty',
         label: 'Moog Sub Phatty',
         caption: 'Moog Sub Phatty',
-        pose: { position: [0.136, 2.316, -1.546], target: [-0.081, 2.282, 0.535], fov: 81 },
-        anchor: [0.458,2.519,0.465],
+        pose: { position: [0.136, 2, -1.546], target: [-0.081, 2.282, 0.535], fov: 120 },
+        anchor: [0.3,2.22,0],
         description:
           'A modern Moog monosynth with a Multidrive circuit and dedicated sub ' +
           'oscillator, built for weighty, growling low-end.',
@@ -128,8 +141,8 @@ export const DEMOS: Demo[] = [
         id: 'moog-minimoog',
         label: 'Moog Minimoog',
         caption: 'Moog Minimoog',
-        pose: { position: [0.127, 1.872, -1.643], target: [-0.061, 1.264, 0.35], fov: 81 },
-        anchor: [0.758,1.559,0.629],
+        pose: { position: [0.127, 1.6, -1.643], target: [-0.061, 1.264, 0.35], fov: 120 },
+        anchor: [0.555, 1.4,0],
         subtitle: 'Model D',
         description:
           'The first portable synth to leave the lab for the stage, and the fat, ' +
@@ -143,8 +156,8 @@ export const DEMOS: Demo[] = [
         id: 'sequential-prophet-10',
         label: 'Sequential Prophet 10',
         caption: 'Sequential Prophet 10',
-        pose: { position: [0.215, 0.985, -1.87], target: [-0.052, 0.406, 0.123], fov: 81 },
-        anchor: [.8,0.656,0.391],
+        pose: { position: [0.215, 0.85, -1.87], target: [-0.052, 0.406, 0.123], fov: 120 },
+        anchor: [0.5,0.658,0],
         description:
           'Ten voices of programmable analog — two Prophet-5s in one chassis — ' +
           'made for dense pads and orchestral swells.',
@@ -157,8 +170,8 @@ export const DEMOS: Demo[] = [
         id: 'roland-juno-60',
         label: 'Roland Juno-60',
         caption: 'Roland Juno-60',
-        pose: { position: [0.122, 0.276, -1.864], target: [-0.06, -0.164, 0.173], fov: 81 },
-        anchor: [1.1,-0.059,0.479],
+        pose: { position: [0.122, 0.276, -1.864], target: [-0.06, -0.164, 0.173], fov: 120 },
+        anchor: [0.78,-0.2,0],
         description:
           "One oscillator wrapped in Roland's unmistakable chorus, and arguably " +
           'the defining polysynth sound of the 1980s.',
@@ -171,8 +184,8 @@ export const DEMOS: Demo[] = [
         id: 'hohner-pianet-m',
         label: 'Hohner Pianet M',
         caption: 'Hohner Pianet M',
-        pose: { position: [0.104, -0.367, -1.887], target: [-0.058, -0.846, 0.143], fov: 81 },
-        anchor: [.8,-0.87,0.479],
+        pose: { position: [0.104, -0.67, -1.887], target: [-0.058, -0.846, 0.143], fov: 120 },
+        anchor: [0.55,-0.87,0],
         description:
           "Hohner's reed-driven electric piano, carrying the warm, plaintive " +
           "Pianet voice woven through the fabric of '60s and '70s pop.",
@@ -192,12 +205,13 @@ export const DEMOS: Demo[] = [
     blurb:
       'Full-room coverage of Studio E. Move freely through the space, or fly to a ' +
       'hero point to inspect the featured gear at capture-grade fidelity.',
-    src: 'splat/studio-e/lod-meta.json', // tiled LOD SOGS (streams by level of detail)
+    src: 'splat/studio-e/meta.json', // SOGS bundle ("best Studio E yet" export)
     cardStyle: 'hud-bottom', // demo-1 style HUD card, anchored to the bottom of the screen
+    refAspect: 16 / 9, // poses authored in the desktop .ratio-16x9 window (4:3 on mobile)
     // Authored opening pose carried over from the new (half) scan's starter.
     initialPose: {
-      position: [2.713,-3.842,-1.049],
-      target: [2.332,-3.268,2.347],
+      position: [-0.81,5.653,-7.861],
+      target: [-0.742,4.881,-4.484],
       fov: 75,
     },
     heroPoints: [
@@ -223,6 +237,7 @@ export const DEMOS: Demo[] = [
       'show how fidelity holds across a larger space. Roam the whole room.',
     src: 'splat/common-room/meta.json', // SOGS bundle (composite of two captures)
     cardStyle: 'anchored', // callouts pinned to the 3D point rather than a HUD panel
+    refAspect: 16 / 9, // poses authored in the desktop .ratio-16x9 window (4:3 on mobile)
     // Rough starting pose aimed at the scene's actual (offset) center. Bounds are
     // floater-inflated (~31 units) so auto-framing fails; explicit pose instead.
     // REFINE with __logPose() for the real shot.

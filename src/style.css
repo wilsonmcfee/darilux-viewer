@@ -143,9 +143,9 @@ button { font-family: var(--sans); }
   margin-bottom: 12px;
 }
 .ratio-16x9 { aspect-ratio: 16 / 9; }
-/* The synths window: a portrait frame — the old 4:3 made 15% skinnier and
-   50% longer (0.85 × 4 : 1.5 × 3 = 3.4 : 4.5). Width comes off the column. */
-.ratio-tall { aspect-ratio: 3.4 / 4.5; width: 85%; }
+/* The synths window: a tall portrait frame. Keep this ratio in sync with the
+   synths demo's `refAspect` in demos.ts — poses are authored at this shape. */
+.ratio-tall { aspect-ratio: 3.4 / 5.5; width: 85%; }
 
 /* ---- Poster (the dormant state) -------------------------------------------- */
 .poster {
@@ -406,7 +406,7 @@ button { font-family: var(--sans); }
 #hero-card-anchored {
   position: absolute;
   z-index: 22;
-  width: 256px;
+  width: min(256px, calc(100% - 32px)); /* never wider than the window allows */
   max-height: 70%;
   overflow-y: auto;
   transform: translateY(-50%);
@@ -466,6 +466,59 @@ button { font-family: var(--sans); }
   font-family: var(--serif);
   font-weight: 400;
   font-size: 16px;
+}
+
+/* ---- Authoring panel (only shown with ?author in the URL) -------------------- */
+#author-panel {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 32;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--shell-line);
+  border-radius: var(--radius);
+  color: var(--shell-ink);
+}
+#author-readout {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre;
+  color: var(--shell-ink-muted);
+}
+.author-btns { display: flex; gap: 8px; }
+.author-btns button {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--shell-ink);
+  background: none;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+.author-btns button:hover { border-color: rgba(242, 237, 229, 0.5); }
+
+/* The last splat-snapped pick — a live dot pinned to the picked 3D point, so
+   you can orbit/zoom and confirm it stays glued to the surface. */
+#author-picked {
+  position: absolute;
+  z-index: 33;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: rgba(184, 57, 46, 0.35);
+  display: none;
 }
 
 /* ---- Authoring crosshair (only shown with ?author in the URL) --------------- */
@@ -692,6 +745,9 @@ button { font-family: var(--sans); }
   /* Give the live windows a little more height to move around in. */
   .ratio-16x9 { aspect-ratio: 4 / 3; }
 
+  /* Cards: the live windows are short on phones (4:3 / portrait), so keep the
+     card a compact strip — tighter padding, smaller type, and never more than
+     ~45% of the window so the subject stays visible behind it. */
   #hero-card,
   #hero-card.bottom {
     left: 10px;
@@ -699,11 +755,22 @@ button { font-family: var(--sans); }
     top: auto;
     bottom: 10px;
     width: auto;
-    max-height: 62%;
+    max-height: 45%;
+    padding: 16px 18px;
     transform: translateY(24px);
   }
   #hero-card.open,
   #hero-card.bottom.open { transform: translateY(0); }
+
+  .hero-card-title { font-size: 19px; }
+  .hero-card-desc { font-size: 13px; line-height: 1.5; margin: 6px 0 10px; }
+  .hero-card-specs { gap: 6px; }
+  .hero-card-specs dt,
+  .hero-card-specs dd { font-size: 12.5px; }
+
+  #hero-card-anchored { padding: 14px 16px; }
+  #hero-card-anchored .hero-card-title { font-size: 17px; }
+  #hero-card-anchored .hero-card-desc { font-size: 12.5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
