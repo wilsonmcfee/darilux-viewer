@@ -290,4 +290,46 @@ export const DEMOS: Demo[] = [
       },
     ],
   },
+
+  /* ---------------------------------------------------------------------- */
+  {
+    id: 'bluedio',
+    title: 'Bluedio',
+    scale: 'Medium scale',
+    blurb:
+      "A dense live room - drum kit, synth wall, DJ booth, red drapes. Authoring " +
+      "scratchpad: hero points are still to be placed by hand.",
+    src: 'splat/bluedio/meta.json', // SOGS bundle ("Bluedio_optimized.sog", 2,534,528 gaussians)
+    cardStyle: 'hud-bottom',
+    refAspect: 16 / 9,
+
+    /* ---- COORDINATE NOTE - read before pasting anything from scene.json ----
+       main.ts rolls every splat entity 180 deg about Z, so a raw .sog point
+       (x, y, z) lands in WORLD space at (-x, -y, z). The autoscene pipeline in
+       `Bluedio Experience/autoscene/` emits raw .sog coordinates, so its numbers
+       must have x and y NEGATED before they go in here. (That roll is also what
+       turns the Y-down .sog into a Y-up world: raw floor y=+4.20 -> world
+       y=-4.20, and the raw eye plane y=0 stays at world y=0, i.e. 4.20 units =
+       1.40 m above the floor at 1 unit = 1/3 m.)
+
+       Poses captured in-browser with __logPose() are ALREADY world-space and
+       need no conversion - that is the path to use.
+       -------------------------------------------------------------------- */
+
+    // Opening shot from autoscene: the walk-region seat with the most saliency
+    // in frame, 0.316 m clear of the walk boundary. Raw .sog was
+    // position [-7.5497, 0, 2.1787] / target [-0.6553, 0.75, 7.9638], yaw 40.
+    // fov 42 matches the vertical FOV the CPU contact sheet was rendered at, so
+    // this frame is the one verified in autoscene/previews.png.
+    initialPose: {
+      position: [7.55, 0, 2.179],
+      target: [0.655, -0.75, 7.964],
+      fov: 42,
+    },
+
+    // Deliberately empty: Will is placing these by hand against the real WebGPU
+    // frames. Add entries with __logPose() for `pose` and ?author +
+    // __logAnchor() for `anchor`.
+    heroPoints: [],
+  },
 ];
