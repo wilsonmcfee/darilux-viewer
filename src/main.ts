@@ -23,6 +23,7 @@ import {
   Asset,
   Color,
   Vec3,
+  CameraFrame,
   TONEMAP_NONE,
   FILLMODE_NONE,
   RESOLUTION_AUTO,
@@ -97,6 +98,48 @@ function boot(): void {
     controller = new OrbitFlyCamera(camera, canvas);
     heroes = new HeroPointManager(camera, document.getElementById('hero-layer')!);
     heroes.onSelect = (hero) => selectHero(hero);
+
+    /* ---- Sharpen A/B (authoring aid) -------------------------------------
+       PlayCanvas ships AMD CAS (Contrast Adaptive Sharpening) in CameraFrame's
+       compose pass. CAS sharpens low-contrast regions hard and backs off on
+       high-contrast edges, so it avoids the halo ringing a naive unsharp mask
+       would put around every gaussian.
+
+       OFF BY DEFAULT, and deliberately not merely disabled: with no ?sharpen
+       param no CameraFrame is constructed at all, so the three client demos
+       render through the exact same path as before this was added. Constructing
+       a CameraFrame installs framePasses and switches the camera to an
+       offscreen HDR target + compose pass.
+
+         ?sharpen=0.3     set the starting amount (0..1, 0 = off)
+         __sharpen(0.4)   change it live in the console, no reload
+         __sharpen(0)     tear the pass back down and release its resources
+
+       toneMapping is pinned to the camera's TONEMAP_NONE. CameraFrame defaults
+       rendering.toneMapping to TONEMAP_LINEAR, which would shift colour the
+       moment sharpening turned on and make the A/B a comparison of two things
+       at once.
+       -------------------------------------------------------------------- */
+    let camFrame: CameraFrame | null = null;
+    const setSharpen = (amount: number): number => {
+      const v = Math.max(0, Math.min(1, Number(amount) || 0));
+      if (v === 0) {
+        if (camFrame) camFrame.enabled = false;
+        return 0;
+      }
+      if (!camFrame) camFrame = new CameraFrame(app!, camera.camera!);
+      camFrame.enabled = true;
+      camFrame.rendering.toneMapping = TONEMAP_NONE;
+      camFrame.rendering.sharpness = v;
+      camFrame.update();
+      return v;
+    };
+    (window as unknown as { __sharpen: (n: number) => number }).__sharpen = setSharpen;
+
+    const sharpenParam = Number(
+      new URLSearchParams(window.location.search).get('sharpen') ?? '0',
+    );
+    if (sharpenParam > 0) setSharpen(sharpenParam);
 
     // Expose the pose/anchor authoring helpers for the browser console.
     (window as unknown as { __logPose: () => void }).__logPose = () => controller!.logPose();
