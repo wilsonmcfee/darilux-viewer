@@ -344,8 +344,8 @@ export const DEMOS: Demo[] = [
     title: 'Bluedio',
     scale: 'Medium scale',
     blurb:
-      "A dense live room - drum kit, synth wall, DJ booth, red drapes. Authoring " +
-      "scratchpad: hero points are still to be placed by hand.",
+      'A dense live room - drum kit, synth wall, DJ booth, red drapes. Ten hero ' +
+      'points, each flying to a piece of gear you can orbit and read about.',
     src: 'splat/bluedio/meta.json', // SOGS bundle ("Bluedio_optimized.sog", 2,534,528 gaussians)
     cardStyle: 'hud-bottom',
     refAspect: 16 / 9,
