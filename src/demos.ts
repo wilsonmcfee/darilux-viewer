@@ -330,12 +330,17 @@ export const DEMOS: Demo[] = [
     /* Authored by Will with __logPose(), in viewer WORLD space - no conversion
        needed or applied. Order here is the order the markers are created in.
 
-       `anchor` is intentionally omitted, so each marker falls back to its
-       pose.target. Note what that means: __logPose() reports target as a
-       look-at point a fixed ~0.6 m ahead of the camera, NOT a point on the
-       gear. So a dot sits dead-centre when you are at its own hero pose, but
-       floats in mid-air when seen from anywhere else. To pin the dots to the
-       gear itself, add ?author to the URL and use __logAnchor() on each.
+       `anchor` is NOT pose.target, and must not be. __logPose() reports target
+       as a look-at point a fixed ~0.6 m ahead of the camera, so falling back to
+       it pins the marker to empty air 0.29-2.24 m in FRONT of the gear (2.24 m
+       for the DJ booth). The dot is then perfectly fixed in world space but
+       slides across the object behind it as you orbit - reads as drift.
+
+       Each anchor below is instead the first visible surface along that pose's
+       own view ray, found by marching the decoded point cloud. Because the
+       anchor lies ON that ray, the dot still projects dead-centre from its own
+       hero pose - only the off-axis views are corrected. Re-derive with
+       ?author + __logAnchor() if a pose changes.
 
        TODO: subtitle / description / specs copy for each. Left blank on
        purpose rather than guessed at - the cards render a placeholder. */
@@ -345,60 +350,70 @@ export const DEMOS: Demo[] = [
         label: 'Dub Station',
         caption: 'Dub Station',
         pose: { position: [6.552, 1.022, 0.198], target: [4.852, 0.357, 0.268], fov: 42 },
+        anchor: [1.303, -1.031, 0.414],
       },
       {
         id: 'roland-space-echo',
         label: 'Roland Space Echo',
         caption: 'Roland Space Echo',
         pose: { position: [6.872, -2.034, -2.087], target: [5.191, -2.403, -2.077], fov: 42 },
+        anchor: [2.946, -2.896, -2.064],
       },
       {
         id: 'juno-6',
         label: 'Juno 6',
         caption: 'Juno 6',
         pose: { position: [5.035, 1.887, 3.418], target: [5.114, 0.984, 5.004], fov: 42 },
+        anchor: [5.224, -0.278, 7.221],
       },
       {
         id: 'jupiter-6',
         label: 'Jupiter 6',
         caption: 'Jupiter 6',
         pose: { position: [5.282, 0.804, 3.115], target: [5.361, -0.105, 4.698], fov: 42 },
+        anchor: [5.479, -1.465, 7.066],
       },
       {
         id: 'access-virus',
         label: 'Access Virus',
         caption: 'Access Virus',
         pose: { position: [-0.309, 0.866, 3.09], target: [-0.208, 0.08, 4.619], fov: 42 },
+        anchor: [-0.017, -1.407, 7.511],
       },
       {
         id: 'ursa-major-sst-282',
         label: 'Ursa Major SST 282',
         caption: 'Ursa Major SST 282 Space Station',
         pose: { position: [-3.051, -2.63, 3.738], target: [-2.925, -2.766, 5.449], fov: 42 },
+        anchor: [-2.862, -2.834, 6.303],
       },
       {
         id: 'urei-la-3a',
         label: 'UREI LA-3A',
         caption: 'UREI LA-3A compressors',
         pose: { position: [-2.897, 1.045, 2.946], target: [-4.284, -0.144, 2.998], fov: 42 },
+        anchor: [-5.424, -1.121, 3.041],
       },
       {
         id: 'pioneer-dj-station',
         label: 'Pioneer DJ Station',
         caption: 'Pioneer DJ Station',
         pose: { position: [-2.998, 2.964, -0.14], target: [-4.67, 2.233, -0.038], fov: 42 },
+        anchor: [-10.82, -0.456, 0.337],
       },
       {
         id: 'shelford-channel',
         label: 'Shelford Channel',
         caption: 'Rupert Neve Designs Shelford Channel',
         pose: { position: [-2.634, 0.432, -3.534], target: [-4.188, -0.527, -3.476], fov: 42 },
+        anchor: [-5.39, -1.269, -3.431],
       },
       {
         id: 'dj-sandman-theory',
         label: 'DJ Sandman Theory',
         caption: 'DJ Sandman Theory',
         pose: { position: [-1.507, 3.825, -4.566], target: [0.293, 3.738, -4.865], fov: 42 },
+        anchor: [4.701, 3.525, -5.597],
       },
     ],
   },
