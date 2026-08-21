@@ -487,7 +487,7 @@ button { font-family: var(--sans); }
   left: 50%;
   top: auto;
   bottom: 18px;
-  width: min(520px, calc(100% - 36px));
+  width: min(520px, calc(100% - 180px)); /* 180px leaves room for the outside arrows */
   max-height: 60%;
   transform: translateX(-50%) translateY(24px);
 }
@@ -495,11 +495,32 @@ button { font-family: var(--sans); }
 
 /* Studio E's card: 20% wider and thinner — a low landscape strip. */
 #hero-card.bottom[data-demo="studio-e"] {
-  width: min(624px, calc(100% - 36px));
+  width: min(624px, calc(100% - 180px));
   max-height: 46%;
   padding: 18px 26px;
 }
 
+
+/* Bluedio's cards carry a real paragraph on every hero, where the other demos
+   mostly carry a line or two. Rather than let the card grow tall, it grows WIDE:
+   more characters per line is fewer lines, at no cost to legibility. Padding and
+   leading are tightened a little; the body stays at 14px, only 0.5px under the
+   shared size. */
+#hero-card.bottom[data-demo="bluedio"] {
+  width: min(620px, calc(100% - 180px));
+  max-height: 52%;
+  padding: 18px 24px;
+}
+#hero-card.bottom[data-demo="bluedio"] .hero-card-title {
+  font-size: 21px; /* the longest title still sets on one line at this width */
+  margin-bottom: 3px;
+}
+#hero-card.bottom[data-demo="bluedio"] .hero-card-sub { margin-bottom: 7px; }
+#hero-card.bottom[data-demo="bluedio"] .hero-card-desc {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 5px 0 1px;
+}
 
 /* Links inside hero descriptions (e.g. the capture-quality example scene). */
 .hero-card-link {
