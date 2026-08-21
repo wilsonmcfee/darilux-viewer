@@ -392,15 +392,37 @@ function boot(): void {
     return [p[0] + (a[0] - p[0]) * k, p[1] + (a[1] - p[1]) * k, p[2] + (a[2] - p[2]) * k];
   }
 
+  /**
+   * autoOrbit.direction -> the ±1 the camera rig wants.
+   *
+   * 'right' maps to the rig's +1 because that is empirically the way every hero
+   * set off before this parameter existed. If it ever reads inverted on screen,
+   * swap these two cases — nothing else depends on the mapping.
+   *
+   * 'random' is drawn HERE, per click, not once at load, so the same hero sets
+   * off a different way on a repeat visit.
+   */
+  function orbitDirection(ao: HeroPoint['autoOrbit']): 1 | -1 | undefined {
+    switch (ao?.direction) {
+      case 'left':
+      case -1:
+        return -1;
+      case 'right':
+      case 1:
+        return 1;
+      case 'random':
+        return Math.random() < 0.5 ? -1 : 1;
+      default:
+        return undefined;
+    }
+  }
+
   function flyToHero(hero: HeroPoint): void {
     // flyToHero enters constrained close-up mode (auto-orbit + view limits).
     // Per-hero autoOrbit config (spin vs sway, direction, pivot) rides along.
     const ao = hero.autoOrbit;
     const pivot = orbitPivot(hero);
-    // direction 'random' is resolved HERE, per click, not once at load — so the
-    // same hero sets off a different way on a repeat visit.
-    const direction =
-      ao?.direction === 'random' ? (Math.random() < 0.5 ? -1 : 1) : ao?.direction;
+    const direction = orbitDirection(ao);
     controller!.flyToHero(
       hero.pose,
       1.6,

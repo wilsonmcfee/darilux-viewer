@@ -61,12 +61,20 @@ export interface HeroPoint {
   autoOrbit?: {
     mode?: 'sway' | 'spin' | 'none';
     /**
-     * Which way the orbit sets off after the fly-in lands.
-     *   1         clockwise (the default, i.e. camera drifts right)
-     *  -1         anticlockwise
-     *  'random'   pick a side per click, so repeat visits differ
+     * Which way the orbit SETS OFF after the fly-in lands.
+     *   'right' / 1    the rig's default — the way every hero moved before
+     *                  this parameter existed
+     *   'left'  / -1   the other way
+     *   'random'       drawn per click, so repeat visits differ
+     *
+     * NOTE this is the STARTING direction, not a side. In mode 'sway' (the
+     * default) the camera is a pendulum: it reverses at ±`amplitude` and so
+     * visits BOTH sides of the landing yaw regardless of what is set here.
+     * To keep a hero off one side entirely — e.g. away from a wall — you want
+     * an asymmetric arc, which this does not yet express. Use `yawLimit` to
+     * tighten both sides equally, or ask for a one-sided arc.
      */
-    direction?: 1 | -1 | 'random';
+    direction?: 1 | -1 | 'left' | 'right' | 'random';
     pivot?: 'anchor' | 'view';
     speed?: number;
     ease?: number;
