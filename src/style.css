@@ -386,7 +386,12 @@ button { font-family: var(--sans); }
   z-index: 28;
   width: min(340px, calc(100% - 36px));
   max-height: calc(100% - 36px);
-  overflow-y: auto;
+  /* Scrolling lives on #hero-card-body, NOT here. overflow-y:auto on the card
+     would clip the prev/next buttons, which are positioned outside its box —
+     one axis of overflow being non-visible forces the other to clip too. */
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
   background: var(--glass-strong);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
@@ -399,11 +404,18 @@ button { font-family: var(--sans); }
   transition: opacity 0.4s var(--ease), transform 0.4s var(--ease);
 }
 #hero-card.open { opacity: 1; transform: translateY(-50%) translateX(0); }
+/* min-height:0 lets a flex item actually shrink, which is what makes it scroll
+   inside the card's max-height instead of pushing the card taller. */
+#hero-card-body { overflow-y: auto; min-height: 0; }
 
-/* Prev / next stepper — flanks the card, vertically centred. `.has-nav` widens
-   the card's side padding so copy never runs under the buttons. Both buttons are
-   hidden entirely when the demo has a single hero point. */
-#hero-card.has-nav { padding-left: 48px; padding-right: 48px; }
+/* Prev / next stepper — sits OUTSIDE the card, vertically centred, so it costs
+   the copy no width at all. `.has-nav` is kept as a styling hook (ui.ts toggles
+   it) and is used only at the mobile breakpoint, where the card is nearly full
+   width and the buttons have to come back inside. Both buttons are hidden
+   entirely when the demo has a single hero point.
+   Lower alpha than the card because these now float over the live 3D scene
+   rather than over the card's glass; the blur keeps them legible against a
+   bright splat. */
 .hero-card-nav {
   position: absolute;
   top: 50%;
@@ -416,7 +428,9 @@ button { font-family: var(--sans); }
   padding: 0 0 2px;
   border: 1px solid var(--shell-line);
   border-radius: 50%;
-  background: rgba(20, 16, 12, 0.5);
+  background: rgba(20, 16, 12, 0.425); /* 15% more transparent than the card's 0.5 */
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
   color: var(--shell-ink-muted);
   font-family: var(--serif);
   font-size: 20px;
@@ -425,12 +439,12 @@ button { font-family: var(--sans); }
   transition: color 0.3s var(--ease), border-color 0.3s var(--ease),
     background 0.3s var(--ease);
 }
-.hero-card-nav.prev { left: 10px; }
-.hero-card-nav.next { right: 10px; }
+.hero-card-nav.prev { left: -42px; }
+.hero-card-nav.next { right: -42px; }
 .hero-card-nav:hover {
   color: var(--shell-ink);
   border-color: rgba(242, 237, 229, 0.5);
-  background: rgba(20, 16, 12, 0.78);
+  background: rgba(20, 16, 12, 0.663);
 }
 
 .hero-card-title {
@@ -485,7 +499,7 @@ button { font-family: var(--sans); }
   max-height: 46%;
   padding: 18px 26px;
 }
-#hero-card.bottom.has-nav[data-demo="studio-e"] { padding-left: 48px; padding-right: 48px; }
+
 
 /* Links inside hero descriptions (e.g. the capture-quality example scene). */
 .hero-card-link {
@@ -854,6 +868,13 @@ button { font-family: var(--sans); }
   }
   #hero-card.open,
   #hero-card.bottom.open { transform: translateY(0); }
+
+  /* The card runs to within 10px of a window that has overflow:hidden, so
+     outside-positioned buttons would be clipped. Tuck them back in and pay the
+     side padding here — the only place it is needed. */
+  .hero-card-nav.prev { left: 8px; }
+  .hero-card-nav.next { right: 8px; }
+  #hero-card.has-nav { padding-left: 44px; padding-right: 44px; }
 
   .hero-card-title { font-size: 19px; }
   .hero-card-desc { font-size: 13px; line-height: 1.5; margin: 6px 0 10px; }
