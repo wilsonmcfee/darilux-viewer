@@ -435,6 +435,7 @@ function boot(): void {
             ease: ao.ease,
             amplitude: ao.amplitude,
             yawLimit: ao.yawLimit,
+            arc: ao.arc,
           }
         : undefined,
     );

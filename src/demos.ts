@@ -55,9 +55,12 @@ export interface HeroPoint {
   //   mode 'none'           = hold still — no auto motion (visitor can still orbit)
   //   direction -1          = start the sway / spin in the opposite direction
   //   pivot 'anchor'        = orbit around the dot's 3D point (default 'view' = the pose target)
+  //   arc [lo, hi]  = the yaw range the camera may occupy, in degrees relative
+  //     to the landing yaw. May be asymmetric — use it to keep a hero from
+  //     swinging into a wall. Defaults to ±60.
   //   speed / ease / amplitude = optional per-hero overrides of the sway feel
-  //     (defaults: speed 7.5°/s, ease 6°, amplitude ±30°). Lower speed + higher
-  //     ease = smoother, gentler turnaround.
+  //     (defaults: speed 7.5°/s, ease 6°, sway = middle half of the arc).
+  //     Lower speed + higher ease = smoother, gentler turnaround.
   autoOrbit?: {
     mode?: 'sway' | 'spin' | 'none';
     /**
@@ -68,25 +71,45 @@ export interface HeroPoint {
      *   'random'       drawn per click, so repeat visits differ
      *
      * NOTE this is the STARTING direction, not a side. In mode 'sway' (the
-     * default) the camera is a pendulum: it reverses at ±`amplitude` and so
-     * visits BOTH sides of the landing yaw regardless of what is set here.
-     * To keep a hero off one side entirely — e.g. away from a wall — you want
-     * an asymmetric arc, which this does not yet express. Use `yawLimit` to
-     * tighten both sides equally, or ask for a one-sided arc.
+     * default) the camera is a pendulum, so it visits both ends of its window
+     * whatever this is set to. To keep a hero off one side entirely, restrict
+     * `arc` — and note that a one-sided arc makes this parameter moot, since
+     * only one direction is then available.
      */
     direction?: 1 | -1 | 'left' | 'right' | 'random';
     pivot?: 'anchor' | 'view';
     speed?: number;
     ease?: number;
-    /** Idle sway half-arc, degrees either side of the landing yaw. Default 30. */
-    amplitude?: number;
     /**
-     * TOTAL ORBIT ARC ALLOWANCE — how far manual dragging may swing either side
-     * of the landing yaw, in degrees. Default 60 (so a 120 deg arc). Lower this
-     * for a hero backed against a wall or in a corner, where the default arc
-     * walks the camera into geometry. Ignored by mode 'spin', which is a
-     * deliberate full 360. `amplitude` is clamped to this automatically.
+     * ORBIT ARC — the yaw range this hero may occupy, in degrees relative to
+     * where the fly-in lands. `[left, right]`, and it may be ASYMMETRIC: that is
+     * the point. A hero backed against a wall on its right gets an arc that
+     * simply excludes the wall.
+     *
+     * SIGN, measured rather than assumed: dragging the mouse RIGHT moves the
+     * offset NEGATIVE (a full drag clamps at -60 on the default arc). So:
+     *
+     *   arc: [-50, 0]     only the side you reach by dragging RIGHT
+     *   arc: [0, 40]      only the side you reach by dragging LEFT
+     *   arc: [-25, 25]    both ways, tighter than default
+     *   (omitted)         ±60, the default
+     *
+     * Careful: `direction: 'right'` is +1, i.e. the POSITIVE side, so its sense
+     * of "right" is the opposite of a rightward mouse drag. If you are unsure
+     * which physical side you want for a given hero, set a one-sided arc, click
+     * the hero, and drag — you will only be able to go one way, and you will see
+     * immediately whether it is the safe side.
+     *
+     * Bounds manual dragging. Idle sway automatically uses the MIDDLE HALF of
+     * the arc so resting motion stays subtler than dragging allows — for the
+     * default ±60 that is exactly ±30. Set `amplitude` to override the sway
+     * width (it is clamped inside the arc). Ignored by mode 'spin', which is a
+     * deliberate full 360.
      */
+    arc?: [number, number];
+    /** Idle sway half-width, degrees. Defaults to a quarter of the arc. */
+    amplitude?: number;
+    /** Symmetric shorthand for `arc: [-n, n]`. Ignored when `arc` is set. */
     yawLimit?: number;
   };
 }

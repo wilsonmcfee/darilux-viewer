@@ -96,8 +96,15 @@ export class OrbitFlyCamera {
   private heroPitchMin = -35;
   private heroPitchMax = 85;
   private heroCenterYaw = 0;      // the hero's front-facing yaw (from its pose)
-  private heroYawLimit = 60;      // manual orbit is clamped to ± this around center
-  private autoOrbitAmplitude = 30; // sway ± this around center (< heroYawLimit)
+  // Yaw bounds are stored as an explicit RANGE relative to heroCenterYaw, not a
+  // ± half-width, because the useful arc is often not centred on where the
+  // fly-in lands: a hero backed against a wall needs an arc that simply
+  // excludes the wall. heroYaw* bounds manual dragging; sway* is the narrower
+  // idle-motion window inside it.
+  private heroYawMin = -60;
+  private heroYawMax = 60;
+  private swayMin = -30;
+  private swayMax = 30;
   private autoOrbitDir = 1;        // current sway direction (+1 / -1)
   private autoOrbitSpeed = 7.5;  // degrees/second at mid-swing (eases at the ends)
   private autoOrbitEase = 6;     // degrees near each end over which speed eases down
@@ -172,6 +179,7 @@ export class OrbitFlyCamera {
       ease?: number;
       amplitude?: number;
       yawLimit?: number;
+      arc?: [number, number];
     },
   ): void {
     // If a pivot is given (e.g. the dot's anchor), orbit around THAT point: keep
@@ -190,16 +198,28 @@ export class OrbitFlyCamera {
     // Per-hero auto-orbit feel (falls back to defaults).
     this.autoOrbitSpeed = opts?.speed ?? DEFAULT_ORBIT.speed;
     this.autoOrbitEase = opts?.ease ?? DEFAULT_ORBIT.ease;
-    // Manual-drag arc, per hero. Reset from the default every time, not just when
-    // overridden, or one tight hero would leak its limit onto the next one.
-    this.heroYawLimit = opts?.yawLimit ?? DEFAULT_ORBIT.yawLimit;
-    // The idle sway must stay inside the manual clamp: the sway writes s.yaw
-    // directly and is NOT clamped by heroYawLimit, so an amplitude wider than the
-    // limit would drift the camera past the wall the limit exists to avoid.
-    this.autoOrbitAmplitude = Math.min(
-      opts?.amplitude ?? DEFAULT_ORBIT.amplitude,
-      this.heroYawLimit,
-    );
+    // Arc model. `arc` is the authoritative yaw range for this hero, in degrees
+    // relative to the landing yaw, and may be asymmetric. Without it, fall back
+    // to the symmetric ±yawLimit shorthand. Both are recomputed on EVERY fly-in,
+    // not only when overridden, or one tight hero would leak its arc onto the
+    // next hero visited.
+    const lim = opts?.yawLimit ?? DEFAULT_ORBIT.yawLimit;
+    const raw = opts?.arc ?? [-lim, lim];
+    const lo = Math.min(raw[0], raw[1]);
+    const hi = Math.max(raw[0], raw[1]);
+    this.heroYawMin = lo;
+    this.heroYawMax = hi;
+    // Idle sway uses the MIDDLE HALF of the arc, keeping resting motion subtler
+    // than what dragging allows — the split the rig always had. For the default
+    // ±60 arc that lands on exactly ±30, identical to the amplitude it replaces.
+    // An explicit `amplitude` overrides the width, still clamped inside the arc.
+    const mid = (lo + hi) / 2;
+    const half =
+      opts?.amplitude !== undefined
+        ? Math.min(opts.amplitude, (hi - lo) / 2)
+        : (hi - lo) / 4;
+    this.swayMin = mid - half;
+    this.swayMax = mid + half;
     this.heroMode = true;
     this.lastInteract = performance.now();
     this.flyTo(framePose, duration);
@@ -280,11 +300,17 @@ export class OrbitFlyCamera {
       } else {
         // Pendulum sway: reverse direction at ±amplitude from the front-facing yaw.
         const offset = shortestAngle(this.heroCenterYaw, this.s.yaw); // yaw − center, in [-180,180]
-        if (offset >= this.autoOrbitAmplitude) this.autoOrbitDir = -1;
-        else if (offset <= -this.autoOrbitAmplitude) this.autoOrbitDir = 1;
+        if (offset >= this.swayMax) this.autoOrbitDir = -1;
+        else if (offset <= this.swayMin) this.autoOrbitDir = 1;
         // Ease speed down toward each turning point (smoothstep) so the reversal is
         // gentle, not abrupt — never fully stalls (15% floor) so it always comes back.
-        const distToEdge = this.autoOrbitAmplitude - Math.abs(offset);
+        // A one-sided arc lands the camera OUTSIDE its sway window (offset 0 with a
+        // window of, say, [-37.5, -12.5]); run at full speed until it arrives
+        // rather than crawling in at the 15% floor.
+        const inside = offset >= this.swayMin && offset <= this.swayMax;
+        const distToEdge = inside
+          ? Math.min(offset - this.swayMin, this.swayMax - offset)
+          : Infinity;
         const t = math.clamp(distToEdge / this.autoOrbitEase, 0, 1);
         const factor = 0.15 + 0.85 * (t * t * (3 - 2 * t));
         this.s.yaw += this.autoOrbitDir * this.autoOrbitSpeed * factor * dt;
@@ -525,8 +551,8 @@ export class OrbitFlyCamera {
     if (this.heroMode && !this.heroSpin) {
       const offset = math.clamp(
         shortestAngle(this.heroCenterYaw, this.s.yaw),
-        -this.heroYawLimit,
-        this.heroYawLimit,
+        this.heroYawMin,
+        this.heroYawMax,
       );
       this.s.yaw = this.heroCenterYaw + offset;
     }
