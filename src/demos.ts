@@ -487,7 +487,7 @@ export const DEMOS: Demo[] = [
         label: 'DJ Sandman Theory',
         caption: 'DJ Sandman Theory',
         subtitle: 'Circa 2000s · Ongoing',
-        description: `Sandman Theory is a DJ and producer from Seattle, Washington with a knack for electronica, house, downtempo and trip-hop. Apart from opening for some of the best DJs in the world, his collection of analog synthesizers and gear elevates his production to new heights. Listen to his latest album, “The Fuzzy Lounge Sessions”.`,
+        description: `Sandman Theory is a DJ and producer from Seattle, Washington with a knack for electronica, house, downtempo and trip-hop. Apart from opening for some of the best DJs in the world, his collection of analog synthesizers and gear elevates his production to new heights. Listen to his latest album, “<a class="hero-card-link" href="https://sandmantheory.net/flsessions" target="_blank" rel="noopener">The Fuzzy Lounge Sessions</a>”.`,
         pose: { position: [-1.507, 3.825, -4.566], target: [0.293, 3.738, -4.865], fov: 42 },
         anchor: [4.701, 3.525, -5.597],
         autoOrbit: { pivot: 'anchor', direction: 'random', arc: [0,40] },
