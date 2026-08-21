@@ -24,6 +24,9 @@ export class HeroPointManager {
   private cam: Entity;
   private layer: HTMLElement;
   private markers: Marker[] = [];
+  // The hero currently being viewed up close. Its dot would otherwise sit dead
+  // centre in front of the very object it labels.
+  private hiddenHero: HeroPoint | null = null;
   private screen = new Vec3();
   private visible = true;
 
@@ -63,6 +66,11 @@ export class HeroPointManager {
     }
   }
 
+  /** Suppress one hero's marker (null shows them all again). */
+  setHiddenHero(hero: HeroPoint | null): void {
+    this.hiddenHero = hero;
+  }
+
   setVisible(v: boolean): void {
     this.visible = v;
     for (const m of this.markers) m.el.style.display = v ? '' : 'none';
@@ -73,6 +81,11 @@ export class HeroPointManager {
     if (!this.cam.camera) return;
     if (this.visible) {
       for (const m of this.markers) {
+        if (m.hero === this.hiddenHero) {
+          m.el.style.opacity = '0';
+          m.el.style.pointerEvents = 'none';
+          continue;
+        }
         this.cam.camera.worldToScreen(m.anchor, this.screen);
         // z <= 0 means the point is behind the camera — hide it.
         if (this.screen.z <= 0) {

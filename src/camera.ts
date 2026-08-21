@@ -181,6 +181,7 @@ export class OrbitFlyCamera {
       yawLimit?: number;
       arc?: [number, number];
     },
+    onArrive?: () => void,
   ): void {
     // If a pivot is given (e.g. the dot's anchor), orbit around THAT point: keep
     // the authored camera position but aim/orbit at the pivot for fuller coverage.
@@ -232,7 +233,9 @@ export class OrbitFlyCamera {
     this.swayMax = Math.min(sHi, hi);
     this.heroMode = true;
     this.lastInteract = performance.now();
-    this.flyTo(framePose, duration);
+    // NOTE onArrive is dropped by interrupt() if the visitor drags mid-flight, so
+    // callers that must run either way should also hook onUserInteract.
+    this.flyTo(framePose, duration, onArrive);
   }
 
   /** Leave close-up mode: restore free orbit / pan / zoom / fly. */

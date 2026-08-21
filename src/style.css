@@ -400,6 +400,39 @@ button { font-family: var(--sans); }
 }
 #hero-card.open { opacity: 1; transform: translateY(-50%) translateX(0); }
 
+/* Prev / next stepper — flanks the card, vertically centred. `.has-nav` widens
+   the card's side padding so copy never runs under the buttons. Both buttons are
+   hidden entirely when the demo has a single hero point. */
+#hero-card.has-nav { padding-left: 48px; padding-right: 48px; }
+.hero-card-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0 0 2px;
+  border: 1px solid var(--shell-line);
+  border-radius: 50%;
+  background: rgba(20, 16, 12, 0.5);
+  color: var(--shell-ink-muted);
+  font-family: var(--serif);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.3s var(--ease), border-color 0.3s var(--ease),
+    background 0.3s var(--ease);
+}
+.hero-card-nav.prev { left: 10px; }
+.hero-card-nav.next { right: 10px; }
+.hero-card-nav:hover {
+  color: var(--shell-ink);
+  border-color: rgba(242, 237, 229, 0.5);
+  background: rgba(20, 16, 12, 0.78);
+}
+
 .hero-card-title {
   font-family: var(--serif);
   font-weight: 400;
@@ -452,6 +485,7 @@ button { font-family: var(--sans); }
   max-height: 46%;
   padding: 18px 26px;
 }
+#hero-card.bottom.has-nav[data-demo="studio-e"] { padding-left: 48px; padding-right: 48px; }
 
 /* Links inside hero descriptions (e.g. the capture-quality example scene). */
 .hero-card-link {

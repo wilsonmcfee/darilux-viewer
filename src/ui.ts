@@ -31,6 +31,7 @@ export class UI {
   private demos: Demo[];
   private cb: UICallbacks;
   private windows = new Map<string, HTMLElement>(); // demoId → .viewer-window
+  private cardHero: HeroPoint | null = null; // hero the open #hero-card describes
   private cardTimer?: number;
   private anchoredTimer?: number;
   private loadingTimer?: number;
@@ -125,13 +126,38 @@ export class UI {
     // Closing either card returns the camera home (main.exitCloseup).
     $('hero-card-close').addEventListener('click', () => this.cb.onExitCloseup());
     $('hero-card-anchored-close').addEventListener('click', () => this.cb.onExitCloseup());
+
+    // Stepper: fly straight to the neighbouring hero, card still open.
+    $('hero-card-prev').addEventListener('click', () => this.stepHero(-1));
+    $('hero-card-next').addEventListener('click', () => this.stepHero(1));
+
     window.addEventListener('keydown', (e) => {
+      const cardOpen = !$('hero-card').classList.contains('hidden');
+      if (cardOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        // Camera fly keys are WASD/QE, so the arrows are free for the stepper.
+        e.preventDefault();
+        this.stepHero(e.key === 'ArrowRight' ? 1 : -1);
+        return;
+      }
       if (e.key !== 'Escape') return;
-      const anyOpen =
-        !$('hero-card').classList.contains('hidden') ||
-        !$('hero-card-anchored').classList.contains('hidden');
+      const anyOpen = cardOpen || !$('hero-card-anchored').classList.contains('hidden');
       if (anyOpen) this.cb.onExitCloseup();
     });
+  }
+
+  /**
+   * Move `delta` places through the OWNING demo's heroPoints array and fly there.
+   * Array order is authoring order — the order the points appear in demos.ts —
+   * which is deliberate, so the stepper reads as a slideshow. Wraps at both ends.
+   */
+  private stepHero(delta: number): void {
+    if (!this.cardHero) return;
+    const owner = this.demos.find((d) => d.heroPoints.includes(this.cardHero!));
+    if (!owner || owner.heroPoints.length < 2) return;
+    const i = owner.heroPoints.indexOf(this.cardHero);
+    const n = owner.heroPoints.length;
+    const next = owner.heroPoints[(i + delta + n) % n];
+    this.cb.onSelectHero(next);
   }
 
   // Anchored variant: pinned to the 3D point (positioned by HeroPointManager).
@@ -153,6 +179,13 @@ export class UI {
   showHeroCard(hero: HeroPoint, placement: 'left' | 'bottom' = 'left', demoId = ''): void {
     const card = $('hero-card');
     if (this.cardTimer) window.clearTimeout(this.cardTimer);
+    this.cardHero = hero;
+    // Only offer the stepper when there is somewhere to step to.
+    const owner = this.demos.find((d) => d.heroPoints.includes(hero));
+    const steppable = (owner?.heroPoints.length ?? 0) > 1;
+    card.classList.toggle('has-nav', steppable);
+    $('hero-card-prev').classList.toggle('hidden', !steppable);
+    $('hero-card-next').classList.toggle('hidden', !steppable);
     $('hero-card-body').innerHTML = this.buildCardHTML(hero);
     card.classList.toggle('bottom', placement === 'bottom'); // left panel vs bottom bar
     card.dataset.demo = demoId; // lets CSS size the card per demo
@@ -162,6 +195,7 @@ export class UI {
 
   hideHeroCard(): void {
     const card = $('hero-card');
+    this.cardHero = null;
     card.classList.remove('open');
     this.cardTimer = window.setTimeout(() => card.classList.add('hidden'), 400);
   }

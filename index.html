@@ -35,6 +35,10 @@
         <!-- Hero-point description card (HUD variants). -->
         <aside id="hero-card" class="hidden" role="dialog" aria-label="Gear details">
           <button id="hero-card-close" class="modal-close" type="button" aria-label="Close">×</button>
+          <!-- Step to the previous / next hero without leaving the card. Shown by
+               ui.ts only when the live demo has more than one hero point. -->
+          <button id="hero-card-prev" class="hero-card-nav prev" type="button" aria-label="Previous point">&lsaquo;</button>
+          <button id="hero-card-next" class="hero-card-nav next" type="button" aria-label="Next point">&rsaquo;</button>
           <div id="hero-card-body"></div>
         </aside>
 

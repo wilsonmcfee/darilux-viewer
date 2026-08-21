@@ -59,6 +59,7 @@ function boot(): void {
   let homePose: Pose | null = null; // the opening framing to return to on "Exit close-up"
   let pendingFrame = false; // true while we wait for a scene's bounds to auto-frame it
   let pendingHero: HeroPoint | null = null; // fly here once the scene finishes loading
+  let closeupHero: HeroPoint | null = null; // hero currently being viewed up close
 
   const ui = new UI(DEMOS, {
     onEnterViewer: (demoId) => enterViewer(demoId),
@@ -96,6 +97,12 @@ function boot(): void {
     app.root.addChild(camera);
 
     controller = new OrbitFlyCamera(camera, canvas);
+    // interrupt() drops the fly-in's onArrive when the visitor drags mid-flight,
+    // which would leave the active hero's dot floating over its own object for
+    // the rest of the close-up. Hide it here too.
+    controller.onUserInteract = () => {
+      if (closeupHero) heroes?.setHiddenHero(closeupHero);
+    };
     heroes = new HeroPointManager(camera, document.getElementById('hero-layer')!);
     heroes.onSelect = (hero) => selectHero(hero);
 
@@ -418,6 +425,10 @@ function boot(): void {
   }
 
   function flyToHero(hero: HeroPoint): void {
+    // Show whatever was hidden before (stepping between heroes) and record the
+    // new one so an interrupted fly-in still hides it (see onUserInteract).
+    heroes!.setHiddenHero(null);
+    closeupHero = hero;
     // flyToHero enters constrained close-up mode (auto-orbit + view limits).
     // Per-hero autoOrbit config (spin vs sway, direction, pivot) rides along.
     const ao = hero.autoOrbit;
@@ -438,6 +449,12 @@ function boot(): void {
             arc: ao.arc,
           }
         : undefined,
+      // Hide this hero's own dot on ARRIVAL, not on click: while the camera is
+      // still flying the dot is the thing you are flying at, but once landed it
+      // sits dead centre in front of the object it labels. Restored by
+      // exitCloseupUI(). Stepping to another hero re-shows the previous one
+      // because closeupHero is reset just below on every fly.
+      () => heroes!.setHiddenHero(hero),
     );
     // Card style is per-demo: HUD panel, or a callout pinned to the 3D point.
     const cardStyle = activeDemo?.cardStyle;
@@ -461,6 +478,8 @@ function boot(): void {
     ui.hideHeroCard();
     ui.hideAnchoredCard();
     heroes?.setActiveAnchor(null);
+    heroes?.setHiddenHero(null); // the dot comes back with the card closed
+    closeupHero = null;
   }
 
   // ---- Scene loader: one splat at a time, with a soft fade -------------------
