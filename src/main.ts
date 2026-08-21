@@ -277,8 +277,18 @@ function boot(): void {
         }
       }
       controller!.update(dt);
-      heroes!.update();
     });
+
+    // Marker projection runs on PRERENDER, not on update, and that placement is
+    // load-bearing. CameraComponent.onAppPrerender() is the ONLY thing that
+    // dirties the camera's cached view matrix (moving the entity does not), and
+    // the render then consumes and clears it. So a worldToScreen() call from
+    // inside app.on('update') silently reprojects with the PREVIOUS frame's
+    // camera pose, and the markers lag the camera by a frame whenever it moves.
+    // Registering here means this listener runs after the camera component's own
+    // prerender handler — added when the component was created, above — so the
+    // matrix is rebuilt from the transform controller.update() just wrote.
+    app.on('prerender', () => heroes!.update());
 
     // ---- Resize: track the HOST WINDOW, not the browser window ---------------
     // The stage is reparented between differently-sized windows, so a

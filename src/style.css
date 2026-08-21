@@ -308,18 +308,27 @@ button { font-family: var(--sans); }
 #stage-exit:hover { color: var(--shell-ink); border-color: rgba(242, 237, 229, 0.5); }
 
 /* ---- Hero-point markers (live 3D pins, positioned each frame) -------------- */
+/* The marker box must be EXACTLY the dot. heropoints.ts writes the projected 3D
+   point to left/top and translate(-50%, -50%) centres THIS ELEMENT on it, so
+   anything else sharing the box pushes the dot off its anchor by half its width.
+   The caption used to be a flex sibling hidden with `opacity: 0` — which still
+   occupies its full nowrap width — putting every dot (captionWidth + 10) / 2 px
+   LEFT of the gear it labels: 38 px for "Juno 6", 153 px for "Rupert Neve
+   Designs Shelford Channel". That is invisible while strafing, because a fixed
+   pixel offset just rides along with the image, but it reads as drift while
+   dollying: the same pixel offset covers a growing PHYSICAL distance on the
+   object as you back away (K·Z/f). Hence "drifts on W/S, fine on A/D, worse
+   further out". Keep the caption out of flow. */
 .hero-marker {
   position: absolute;
   transform: translate(-50%, -50%);
   pointer-events: auto;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: block;
   transition: opacity 0.25s var(--ease);
 }
 .hero-dot {
-  flex: 0 0 auto;
+  display: block; /* no longer a flex item, so it must blockify itself */
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -350,6 +359,9 @@ button { font-family: var(--sans); }
   color: var(--shell-ink);
 }
 .hero-marker .hero-caption {
+  position: absolute; /* out of flow — see the .hero-marker note above */
+  left: calc(100% + 10px);
+  top: 50%;
   white-space: nowrap;
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -360,10 +372,10 @@ button { font-family: var(--sans); }
   border-radius: 3px;
   border: 1px solid rgba(242, 237, 229, 0.14);
   opacity: 0;
-  transform: translateX(-4px);
+  transform: translate(-4px, -50%);
   transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
 }
-.hero-marker:hover .hero-caption { opacity: 1; transform: translateX(0); }
+.hero-marker:hover .hero-caption { opacity: 1; transform: translate(0, -50%); }
 
 /* ---- Hero-point description card (inside the window) ----------------------- */
 #hero-card {
