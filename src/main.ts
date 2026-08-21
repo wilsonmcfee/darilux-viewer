@@ -397,17 +397,22 @@ function boot(): void {
     // Per-hero autoOrbit config (spin vs sway, direction, pivot) rides along.
     const ao = hero.autoOrbit;
     const pivot = orbitPivot(hero);
+    // direction 'random' is resolved HERE, per click, not once at load — so the
+    // same hero sets off a different way on a repeat visit.
+    const direction =
+      ao?.direction === 'random' ? (Math.random() < 0.5 ? -1 : 1) : ao?.direction;
     controller!.flyToHero(
       hero.pose,
       1.6,
       ao
         ? {
             mode: ao.mode,
-            direction: ao.direction,
+            direction,
             pivot,
             speed: ao.speed,
             ease: ao.ease,
             amplitude: ao.amplitude,
+            yawLimit: ao.yawLimit,
           }
         : undefined,
     );

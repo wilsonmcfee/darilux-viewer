@@ -36,7 +36,7 @@ const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE']);
 const TRACKED_KEYS = new Set([...MOVE_KEYS, 'ShiftLeft', 'ShiftRight']);
 
 // Default auto-orbit feel (per-hero overrides can replace any of these).
-const DEFAULT_ORBIT = { speed: 7.5, ease: 6, amplitude: 30 };
+const DEFAULT_ORBIT = { speed: 7.5, ease: 6, amplitude: 30, yawLimit: 60 };
 
 interface OrbitState {
   target: Vec3;
@@ -171,6 +171,7 @@ export class OrbitFlyCamera {
       speed?: number;
       ease?: number;
       amplitude?: number;
+      yawLimit?: number;
     },
   ): void {
     // If a pivot is given (e.g. the dot's anchor), orbit around THAT point: keep
@@ -189,7 +190,16 @@ export class OrbitFlyCamera {
     // Per-hero auto-orbit feel (falls back to defaults).
     this.autoOrbitSpeed = opts?.speed ?? DEFAULT_ORBIT.speed;
     this.autoOrbitEase = opts?.ease ?? DEFAULT_ORBIT.ease;
-    this.autoOrbitAmplitude = opts?.amplitude ?? DEFAULT_ORBIT.amplitude;
+    // Manual-drag arc, per hero. Reset from the default every time, not just when
+    // overridden, or one tight hero would leak its limit onto the next one.
+    this.heroYawLimit = opts?.yawLimit ?? DEFAULT_ORBIT.yawLimit;
+    // The idle sway must stay inside the manual clamp: the sway writes s.yaw
+    // directly and is NOT clamped by heroYawLimit, so an amplitude wider than the
+    // limit would drift the camera past the wall the limit exists to avoid.
+    this.autoOrbitAmplitude = Math.min(
+      opts?.amplitude ?? DEFAULT_ORBIT.amplitude,
+      this.heroYawLimit,
+    );
     this.heroMode = true;
     this.lastInteract = performance.now();
     this.flyTo(framePose, duration);
