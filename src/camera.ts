@@ -209,17 +209,27 @@ export class OrbitFlyCamera {
     const hi = Math.max(raw[0], raw[1]);
     this.heroYawMin = lo;
     this.heroYawMax = hi;
-    // Idle sway uses the MIDDLE HALF of the arc, keeping resting motion subtler
-    // than what dragging allows — the split the rig always had. For the default
-    // ±60 arc that lands on exactly ±30, identical to the amplitude it replaces.
-    // An explicit `amplitude` overrides the width, still clamped inside the arc.
-    const mid = (lo + hi) / 2;
+    // Idle sway is a quarter of the arc wide by default, keeping resting motion
+    // subtler than what dragging allows — the split the rig always had. For the
+    // default ±60 arc that lands on exactly ±30, identical to the amplitude it
+    // replaces. An explicit `amplitude` overrides the width.
     const half =
       opts?.amplitude !== undefined
         ? Math.min(opts.amplitude, (hi - lo) / 2)
         : (hi - lo) / 4;
-    this.swayMin = mid - half;
-    this.swayMax = mid + half;
+    // The window is centred on the LANDING yaw (offset 0), not on the middle of
+    // the arc, so the authored framing is always part of the idle motion. An
+    // earlier version centred it on the arc, which on a one-sided arc such as
+    // [0, 40] produced a window of [10, 30] that excluded the landing point: the
+    // camera ran full-speed from 0 to 10, then pendulumed 10<->30 and never came
+    // back — reading as two separate arcs. When the window would fall outside the
+    // arc, SHIFT it in rather than shrinking it, so it keeps its intended width.
+    let sLo = -half;
+    let sHi = half;
+    if (sLo < lo) { sHi += lo - sLo; sLo = lo; }
+    if (sHi > hi) { sLo -= sHi - hi; sHi = hi; }
+    this.swayMin = Math.max(sLo, lo);
+    this.swayMax = Math.min(sHi, hi);
     this.heroMode = true;
     this.lastInteract = performance.now();
     this.flyTo(framePose, duration);

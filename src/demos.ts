@@ -100,10 +100,11 @@ export interface HeroPoint {
      * the hero, and drag — you will only be able to go one way, and you will see
      * immediately whether it is the safe side.
      *
-     * Bounds manual dragging. Idle sway automatically uses the MIDDLE HALF of
-     * the arc so resting motion stays subtler than dragging allows — for the
-     * default ±60 that is exactly ±30. Set `amplitude` to override the sway
-     * width (it is clamped inside the arc). Ignored by mode 'spin', which is a
+     * Bounds manual dragging. Idle sway is a quarter of the arc wide, centred on
+     * the LANDING yaw so the authored framing is always part of the resting
+     * motion — for the default ±60 that is exactly ±30. On a one-sided arc the
+     * window is shifted inward rather than shrunk, so [0, 40] sways over [0, 20].
+     * Set `amplitude` to override the width. Ignored by mode 'spin', which is a
      * deliberate full 360.
      */
     arc?: [number, number];
@@ -368,8 +369,8 @@ export const DEMOS: Demo[] = [
     // fov 42 matches the vertical FOV the CPU contact sheet was rendered at, so
     // this frame is the one verified in autoscene/previews.png.
     initialPose: {
-      position: [7.55, 0, 2.179],
-      target: [0.655, -0.75, 7.964],
+      position: [10.473, 2.213, -3.39],
+      target: [3.111, -0.507, 1.079],
       fov: 42,
     },
 
@@ -405,7 +406,7 @@ export const DEMOS: Demo[] = [
         caption: 'Roland Space Echo',
         pose: { position: [6.872, -2.034, -2.087], target: [5.191, -2.403, -2.077], fov: 42 },
         anchor: [2.946, -2.896, -2.064],
-        autoOrbit: { pivot: 'anchor', direction: 'random' },
+        autoOrbit: { pivot: 'anchor', direction: 'random', arc: [-25,25] },
       },
       {
         id: 'juno-6',
@@ -453,7 +454,7 @@ export const DEMOS: Demo[] = [
         caption: 'Pioneer DJ Station',
         pose: { position: [-2.998, 2.964, -0.14], target: [-4.67, 2.233, -0.038], fov: 42 },
         anchor: [-10.82, -0.456, 0.337],
-        autoOrbit: { pivot: 'anchor', direction: 'random' },
+        autoOrbit: { pivot: 'anchor', direction: 'random', arc: [-40,40] },
       },
       {
         id: 'shelford-channel',
@@ -469,7 +470,7 @@ export const DEMOS: Demo[] = [
         caption: 'DJ Sandman Theory',
         pose: { position: [-1.507, 3.825, -4.566], target: [0.293, 3.738, -4.865], fov: 42 },
         anchor: [4.701, 3.525, -5.597],
-        autoOrbit: { pivot: 'anchor', direction: 'random' },
+        autoOrbit: { pivot: 'anchor', direction: 'random', arc: [0,40] },
       },
     ],
   },
