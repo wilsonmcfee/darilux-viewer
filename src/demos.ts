@@ -351,6 +351,7 @@ export const DEMOS: Demo[] = [
         caption: 'Dub Station',
         pose: { position: [6.552, 1.022, 0.198], target: [4.852, 0.357, 0.268], fov: 42 },
         anchor: [1.303, -1.031, 0.414],
+        autoOrbit: { pivot: 'anchor' },
       },
       {
         id: 'roland-space-echo',
@@ -358,6 +359,7 @@ export const DEMOS: Demo[] = [
         caption: 'Roland Space Echo',
         pose: { position: [6.872, -2.034, -2.087], target: [5.191, -2.403, -2.077], fov: 42 },
         anchor: [2.946, -2.896, -2.064],
+        autoOrbit: { pivot: 'anchor' },
       },
       {
         id: 'juno-6',
@@ -365,6 +367,7 @@ export const DEMOS: Demo[] = [
         caption: 'Juno 6',
         pose: { position: [5.035, 1.887, 3.418], target: [5.114, 0.984, 5.004], fov: 42 },
         anchor: [5.224, -0.278, 7.221],
+        autoOrbit: { pivot: 'anchor' },
       },
       {
         id: 'jupiter-6',
@@ -372,6 +375,7 @@ export const DEMOS: Demo[] = [
         caption: 'Jupiter 6',
         pose: { position: [5.282, 0.804, 3.115], target: [5.361, -0.105, 4.698], fov: 42 },
         anchor: [5.479, -1.465, 7.066],
+        autoOrbit: { pivot: 'anchor' },
       },
       {
         id: 'access-virus',
@@ -379,6 +383,7 @@ export const DEMOS: Demo[] = [
         caption: 'Access Virus',
         pose: { position: [-0.309, 0.866, 3.09], target: [-0.208, 0.08, 4.619], fov: 42 },
         anchor: [-0.017, -1.407, 7.511],
+        autoOrbit: { pivot: 'anchor' },
       },
       {
         id: 'ursa-major-sst-282',
@@ -386,6 +391,7 @@ export const DEMOS: Demo[] = [
         caption: 'Ursa Major SST 282 Space Station',
         pose: { position: [-3.051, -2.63, 3.738], target: [-2.925, -2.766, 5.449], fov: 42 },
         anchor: [-2.862, -2.834, 6.303],
+        autoOrbit: { pivot: 'anchor' },
       },
       {
         id: 'urei-la-3a',
@@ -393,6 +399,7 @@ export const DEMOS: Demo[] = [
         caption: 'UREI LA-3A compressors',
         pose: { position: [-2.897, 1.045, 2.946], target: [-4.284, -0.144, 2.998], fov: 42 },
         anchor: [-5.424, -1.121, 3.041],
+        autoOrbit: { pivot: 'anchor' },
       },
       {
         id: 'pioneer-dj-station',
@@ -400,6 +407,7 @@ export const DEMOS: Demo[] = [
         caption: 'Pioneer DJ Station',
         pose: { position: [-2.998, 2.964, -0.14], target: [-4.67, 2.233, -0.038], fov: 42 },
         anchor: [-10.82, -0.456, 0.337],
+        autoOrbit: { pivot: 'anchor' },
       },
       {
         id: 'shelford-channel',
@@ -407,6 +415,7 @@ export const DEMOS: Demo[] = [
         caption: 'Rupert Neve Designs Shelford Channel',
         pose: { position: [-2.634, 0.432, -3.534], target: [-4.188, -0.527, -3.476], fov: 42 },
         anchor: [-5.39, -1.269, -3.431],
+        autoOrbit: { pivot: 'anchor' },
       },
       {
         id: 'dj-sandman-theory',
@@ -414,6 +423,7 @@ export const DEMOS: Demo[] = [
         caption: 'DJ Sandman Theory',
         pose: { position: [-1.507, 3.825, -4.566], target: [0.293, 3.738, -4.865], fov: 42 },
         anchor: [4.701, 3.525, -5.597],
+        autoOrbit: { pivot: 'anchor' },
       },
     ],
   },

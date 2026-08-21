@@ -369,11 +369,34 @@ function boot(): void {
     flyToHero(hero);
   }
 
+  /**
+   * Orbit pivot for a hero, pushed PAST its surface anchor.
+   *
+   * `anchor` is a point on the object's FRONT FACE. Orbiting a front-face point
+   * sweeps the camera around the skin of the object rather than around its mass,
+   * which reads as looking side to side instead of circling the piece. Pushing
+   * the pivot roughly to the object's middle makes the same drag arc around it.
+   *
+   * The push is along the camera→anchor ray, and the anchor already lies on the
+   * pose's view ray, so the pivot stays collinear with the authored framing:
+   * yaw and pitch are untouched and only the orbit RADIUS changes. Landing
+   * framing is therefore identical to before.
+   */
+  const HERO_PIVOT_PUSH = 0.18; // fraction of the camera→anchor distance
+
+  function orbitPivot(hero: HeroPoint): [number, number, number] | undefined {
+    if (hero.autoOrbit?.pivot !== 'anchor') return undefined;
+    const a = hero.anchor ?? hero.pose.target;
+    const p = hero.pose.position;
+    const k = 1 + HERO_PIVOT_PUSH;
+    return [p[0] + (a[0] - p[0]) * k, p[1] + (a[1] - p[1]) * k, p[2] + (a[2] - p[2]) * k];
+  }
+
   function flyToHero(hero: HeroPoint): void {
     // flyToHero enters constrained close-up mode (auto-orbit + view limits).
     // Per-hero autoOrbit config (spin vs sway, direction, pivot) rides along.
     const ao = hero.autoOrbit;
-    const pivot = ao?.pivot === 'anchor' ? (hero.anchor ?? hero.pose.target) : undefined;
+    const pivot = orbitPivot(hero);
     controller!.flyToHero(
       hero.pose,
       1.6,

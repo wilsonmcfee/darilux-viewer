@@ -81,8 +81,9 @@ export class OrbitFlyCamera {
   // Tuning.
   private rotSpeed = 0.28;   // deg per pixel
   private zoomSpeed = 0.0016;
-  private minDistance = 0.3;
-  private maxDistance = 200;
+  // No free-mode distance clamp any more: free rotation is eye-centred and the
+  // free-mode wheel translates instead of shrinking the orbit radius, so
+  // `distance` is fixed outside hero mode (hero mode has its own band).
   private pitchLimit = 88;   // degrees
 
   // Hero close-up mode: gentle auto-orbit around the subject + view constraints
@@ -110,7 +111,13 @@ export class OrbitFlyCamera {
   // WASD/Q-E free-fly (authoring aid): translates the orbit target through the
   // scene so you can fly up to a piece of gear before capturing its pose.
   private pressedKeys = new Set<string>();
-  private flySpeed = 0.9; // fraction of the current orbit distance travelled per second
+  private flySpeed = 0.9; // fraction of moveReference travelled per second
+  // Movement speed is keyed to the demo's AUTHORED framing distance, captured
+  // once, not to the live orbit distance. Keying it to the live distance meant
+  // zooming in throttled WASD to a crawl; keying it to a hard constant would
+  // feel wrong in scenes of different scale. This keeps "normal speed" normal
+  // at every zoom level while still adapting per scene.
+  private moveReference = 4;
 
   // Callback so the UI can react when the visitor takes over (e.g. show "Exit").
   onUserInteract?: () => void;
@@ -144,6 +151,7 @@ export class OrbitFlyCamera {
     this.heroMode = false;
     this.heroSpin = false;
     this.s = this.stateFromPose(pose);
+    this.moveReference = this.s.distance;
     this.apply();
   }
 
@@ -206,6 +214,7 @@ export class OrbitFlyCamera {
     const pitch = Math.asin(dir.y) * DEG;
     const distance = Math.max(radius, 0.5) / Math.sin((fov * RAD) / 2);
     this.s = { target: center.clone(), distance, yaw, pitch, fov };
+    this.moveReference = distance;
     this.apply();
   }
 
@@ -328,6 +337,17 @@ export class OrbitFlyCamera {
     return { target, distance, yaw, pitch, fov: pose.fov };
   }
 
+  /** Unit vector pointing from the pivot toward the eye (matches apply()). */
+  private dirFrom(yaw: number, pitch: number): Vec3 {
+    const cp = Math.cos(pitch * RAD);
+    return new Vec3(cp * Math.sin(yaw * RAD), Math.sin(pitch * RAD), cp * Math.cos(yaw * RAD));
+  }
+
+  /** Current eye position, derived from orbit params rather than the entity. */
+  private eyePosition(): Vec3 {
+    return this.dirFrom(this.s.yaw, this.s.pitch).mulScalar(this.s.distance).add(this.s.target);
+  }
+
   private cloneState(s: OrbitState): OrbitState {
     return { target: s.target.clone(), distance: s.distance, yaw: s.yaw, pitch: s.pitch, fov: s.fov };
   }
@@ -420,8 +440,7 @@ export class OrbitFlyCamera {
     const worldUp = new Vec3(0, 1, 0);
 
     const fast = k.has('ShiftLeft') || k.has('ShiftRight');
-    // Speed scales with orbit distance so it feels consistent at any zoom.
-    const speed = Math.max(this.s.distance, 0.5) * this.flySpeed * (fast ? 3 : 1) * dt;
+    const speed = Math.max(this.moveReference, 0.5) * this.flySpeed * (fast ? 3 : 1) * dt;
 
     const move = new Vec3();
     move.add(forward.mulScalar(advance));
@@ -483,6 +502,13 @@ export class OrbitFlyCamera {
 
   private orbit(dx: number, dy: number): void {
     this.lastInteract = performance.now();
+    // FREE mode is mouselook: the eye stays put and the view swings around it,
+    // like turning your head. Orbiting a pivot metres ahead instead swung the
+    // whole body on an arc, which is why navigation felt unmoored until you
+    // zoomed all the way in (which collapsed the pivot onto the eye). Capture
+    // the eye now, move the angles, then re-derive the pivot to put it back.
+    // HERO mode deliberately keeps true orbit — there the pivot is the point.
+    const eye = this.heroMode ? null : this.eyePosition();
     this.s.yaw -= dx * this.rotSpeed;
     // In close-up (sway mode only), clamp yaw to a front arc so the camera can't
     // swing behind the piece. Spin mode (central fixture) allows full 360°.
@@ -498,15 +524,31 @@ export class OrbitFlyCamera {
     const min = this.heroMode ? this.heroPitchMin : -this.pitchLimit;
     const max = this.heroMode ? this.heroPitchMax : this.pitchLimit;
     this.s.pitch = math.clamp(this.s.pitch + dy * this.rotSpeed, min, max);
+    if (eye) {
+      // target = eye - distance * dir, so the eye lands exactly where it was.
+      this.s.target.copy(eye).sub(this.dirFrom(this.s.yaw, this.s.pitch).mulScalar(this.s.distance));
+    }
     this.apply();
   }
 
   private zoom(delta: number): void {
     this.lastInteract = performance.now();
-    // In close-up, clamp to a band around the subject; otherwise the full range.
-    const lo = this.heroMode ? this.heroMinDistance : this.minDistance;
-    const hi = this.heroMode ? this.heroMaxDistance : this.maxDistance;
-    this.s.distance = math.clamp(this.s.distance * (1 + delta * this.zoomSpeed), lo, hi);
+    if (!this.heroMode) {
+      // Now that free rotation is eye-centred, `distance` no longer sets the
+      // rotation feel — it only scales pan. So the wheel dollies BOTH eye and
+      // pivot along the view axis, holding distance constant. That keeps pan
+      // feel stable and means the wheel never bottoms out against minDistance
+      // the way shrinking the orbit radius did.
+      const step = delta * this.zoomSpeed * Math.max(this.moveReference, 0.5);
+      this.s.target.add(this.dirFrom(this.s.yaw, this.s.pitch).mulScalar(step));
+      this.apply();
+      return;
+    }
+    this.s.distance = math.clamp(
+      this.s.distance * (1 + delta * this.zoomSpeed),
+      this.heroMinDistance,
+      this.heroMaxDistance,
+    );
     this.apply();
   }
 
