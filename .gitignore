@@ -4,6 +4,14 @@ dist
 .DS_Store
 .vite
 
+# autoscene intermediates. ~95 MB and regenerable in seconds from the splat,
+# so they must never be committed by someone who ran the pipeline in place.
+autoscene/xyz.npy
+autoscene/sh0.npy
+autoscene/grids.npz
+autoscene/unpacked/
+autoscene/__pycache__/
+
 # Splat source files are large — keep raw captures out of git.
 # Only the COMPRESSED, web-ready splats in public/splat/ (small .sog/.spz) should be committed.
 *.ply

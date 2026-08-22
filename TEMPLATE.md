@@ -416,7 +416,7 @@ the orbit pivot sits, as a fraction of the camera-to-anchor distance.
    you trust it.
 9. **NumPy >= 2.0** if you use the offline `autoscene` pipeline — and note that
    its `scene.json` is in raw coordinates. See
-   `Bluedio Experience/autoscene/RUNNING.md`.
+   `autoscene/RUNNING.md`.
 
 ## A standalone page for one scan
 

@@ -489,7 +489,7 @@ export const DEMOS: Demo[] = [
          marked-up copy of the figure it emits. Re-derive rather than editing
          these numbers:
 
-             cd "Bluedio Experience/autoscene"
+             cd autoscene
              python envelope.py --edits edits_bluedio.json
 
          It starts from the same occupancy grid autoscene.py builds, but with
@@ -606,7 +606,7 @@ export const DEMOS: Demo[] = [
     /* ---- COORDINATE NOTE - read before pasting anything from scene.json ----
        main.ts rolls every splat entity 180 deg about Z, so a raw .sog point
        (x, y, z) lands in WORLD space at (-x, -y, z). The autoscene pipeline in
-       `Bluedio Experience/autoscene/` emits raw .sog coordinates, so its numbers
+       `autoscene/` emits raw .sog coordinates, so its numbers
        must have x and y NEGATED before they go in here. (That roll is also what
        turns the Y-down .sog into a Y-up world: raw floor y=+4.20 -> world
        y=-4.20, and the raw eye plane y=0 stays at world y=0, i.e. 4.20 units =

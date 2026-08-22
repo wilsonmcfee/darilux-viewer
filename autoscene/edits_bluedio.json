@@ -1,0 +1,51 @@
+{
+  "_frame": "All coordinates are METRES in the figure's own axes (raw .sog XZ). NOTE the figure's x axis is NEGATED against viewer world x, so 'left' on the plot is 'right' in the room.",
+  "_islandNames": "Optional, rank -> label. Affects the figure only.",
+  "_islandPads": "Rank -> standoff in metres. Overrides --pad-tall / --pad-low for that island.",
+  "_include": "Forces floor IN where a pad was too greedy. Intersected with the room's free space first, so it relaxes the standoff but stops at real geometry. Must TOUCH the main region or it is dropped.",
+  "_exclude": "Carves floor OUT. Same three shape kinds.",
+  "islandNames": {
+    "0": "desk / console",
+    "1": "dub station"
+  },
+  "islandPads": {},
+  "include": [
+    {
+      "kind": "rect",
+      "min": [
+        0.55,
+        1.3
+      ],
+      "max": [
+        2.4,
+        1.95
+      ],
+      "note": "Widen the north-east arm. The sliver between the north wall and the top of the desk was too short to move around in."
+    },
+    {
+      "kind": "rect",
+      "min": [
+        0.25,
+        -1.05
+      ],
+      "max": [
+        1.02,
+        1.6
+      ],
+      "note": "The east corridor, and the arc around the chair nub. The 0.32 m desk pad stood the boundary off far enough to pinch the corridor shut beside the chair; this brings it up to the chair surface. It reaches west to 0.25 to swallow the un-walkable slot that sat between this pad and the dub station pad — that slot forced the ring to run into it and back out, and RDP shaved its two walls past each other. Clipped to free space, so the chair stays solid."
+    },
+    {
+      "kind": "rect",
+      "min": [
+        -1.15,
+        -1.45
+      ],
+      "max": [
+        0.2,
+        -0.95
+      ],
+      "note": "The channel south of the dub station. Closes the loop, so the dub station can be walked all the way around. Thin — see the falloffZone covering it in demos.ts."
+    }
+  ],
+  "exclude": []
+}

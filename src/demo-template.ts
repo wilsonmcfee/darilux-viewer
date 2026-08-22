@@ -141,7 +141,7 @@ export const TEMPLATE: Demo = {
 
     /* THE WALKABLE REGION. Derive it, do not hand-write it:
 
-           cd "Bluedio Experience/autoscene"
+           cd autoscene
            python envelope.py --xyz ./xyz.npy --sh0 ./sh0.npy
 
        That prints a paste-ready block and an envelope.png to judge it by. Read
