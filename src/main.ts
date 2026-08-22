@@ -36,9 +36,15 @@ import { createDevice, canRender } from './device';
 import { OrbitFlyCamera } from './camera';
 import { HeroPointManager } from './heropoints';
 import { SplatPicker } from './splatpick';
+import { mountChrome } from './stage';
 import { UI } from './ui';
 
 function boot(): void {
+  // The stage chrome is shared markup, injected rather than pasted into each
+  // page (see stage.ts). This MUST run before anything resolves an id from it:
+  // UI's constructor looks every one of them up eagerly and throws on a miss.
+  mountChrome();
+
   const stage = document.getElementById('stage') as HTMLElement;
   const canvas = document.getElementById('viewer') as HTMLCanvasElement;
 
@@ -66,6 +72,9 @@ function boot(): void {
     onExitViewer: () => exitViewer(),
     onSelectHero: (hero) => selectHero(hero),
     onExitCloseup: () => exitCloseup(),
+    // Persists across scene loads — HeroPointManager keeps it separate from the
+    // load gate, so streaming a new splat cannot switch the points back on.
+    onTogglePoints: (on) => heroes?.setPointsEnabled(on),
   });
 
   // ---- Lazy engine creation -------------------------------------------------
@@ -148,9 +157,27 @@ function boot(): void {
     );
     if (sharpenParam > 0) setSharpen(sharpenParam);
 
+    // Walk mode is OFF in authoring mode: you cannot author a hero pose 2.4 m
+    // up from a body that cannot leave the floor, and orbit/fly exist precisely
+    // as authoring tools. __walk(1) puts it back so a framing can be checked at
+    // standing height without dropping ?author.
+    controller.setWalkEnabled(!authorMode);
+
     // Expose the pose/anchor authoring helpers for the browser console.
     (window as unknown as { __logPose: () => void }).__logPose = () => controller!.logPose();
     (window as unknown as { __logAnchor: () => void }).__logAnchor = () => controller!.logAnchor();
+    // Walk-mode knobs. __eyeHeight() is the one to reach for: the 1.55 m in
+    // demos.ts is a reasoned choice, not a measured fact, and it should be
+    // settled against real WebGPU frames rather than argued about on paper.
+    (window as unknown as { __walk: (on: unknown) => void }).__walk = (on) =>
+      controller!.setWalkEnabled(Boolean(Number(on)));
+    (window as unknown as { __eyeHeight: (m?: number) => number | null }).__eyeHeight = (m) => {
+      if (m === undefined) return controller!.eyeHeightMetres;
+      return controller!.setEyeHeight(m);
+    };
+    // Signed distance to the walk boundary + the backstop counter (brief §8).
+    (window as unknown as { __walkDebug: () => unknown }).__walkDebug = () =>
+      controller!.walkDebug;
 
     // Authoring aid: add ?author (or #author) to the URL for authoring mode —
     // a center crosshair plus an on-screen panel with a live pose readout and
@@ -501,8 +528,13 @@ function boot(): void {
     // Poses are authored at this demo's desktop window aspect; the camera
     // compensates fov whenever the live viewport is narrower (see camera.ts).
     controller!.setReferenceAspect(demo.refAspect ?? 16 / 9);
+    // Height-locked movement, for the demos that declare a floor and a scale.
+    // Explicitly null for the others, so swapping scenes can never leave the
+    // previous demo's walk plane installed under the new one.
+    controller!.setWalk(demo.walk ?? null);
 
     exitCloseupUI();
+    ui.setGuide(demo.guide ?? null);
     ui.showLoading(`Loading ${demo.title}…`);
     heroes!.setVisible(false);
     pendingFrame = false; // cancel any auto-frame still pending from a prior scene

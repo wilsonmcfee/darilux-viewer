@@ -115,6 +115,90 @@ export interface HeroPoint {
   };
 }
 
+import type { WalkRegion } from './walk';
+export type { WalkRegion, WalkHole, WalkFalloffZone } from './walk';
+
+/**
+ * WALK MODE — constrained movement at a fixed standing eye height.
+ * ----------------------------------------------------------------------------
+ * Per the navigation model in RESTYLE_HANDOFF: a visitor experiences a scene as
+ * an authored hero fly-in OR a walk at fixed eye height. Never a free fly. The
+ * point is not to restrict the visitor — it is that a splat is only trustworthy
+ * where the capture rig actually went. A camera that can rise above the top ring
+ * or sink to the floorboards is a camera aimed at unreconstructed haze.
+ *
+ * Set this on a demo to height-lock its free movement. Omit it and that demo
+ * keeps the old free-fly behaviour untouched. `?author` also disables walk mode
+ * wholesale, because authoring a hero pose 2.4 m up needs the free fly; use
+ * `__walk(1)` in the console to force it back on while authoring.
+ *
+ * WHERE THE NUMBERS COME FROM (Bluedio, and the shape of it for any scene):
+ * `floorY` and `unitsPerMetre` are properties of the SCENE, derived once — for
+ * Bluedio, from the density plane the autoscene pipeline found plus Will's
+ * 1.40 m anchor. `eyeHeight` is a design choice layered on top of them. They
+ * are kept separate so retuning the eye height never means touching the scale.
+ */
+export interface WalkConfig {
+  /**
+   * Standing eye height in METRES above `floorY`. 1.55 per the spec: it sits
+   * between the 1.4 m and 1.9 m capture rings, so every horizontal look
+   * direction is bracketed above and below by a covered height rather than
+   * extrapolating off the top one. Tune live with `__eyeHeight(1.6)`.
+   */
+  eyeHeight: number;
+  /** World-space y of the floor plane (Bluedio: -4.20, after the 180° Z roll). */
+  floorY: number;
+  /** World units per metre in this scene (Bluedio: 3, i.e. 1 unit = 1/3 m). */
+  unitsPerMetre: number;
+  /** Walking speed, metres per second. Default 1.25 — an unhurried indoor walk. */
+  speed?: number;
+  /** Shift multiplier. Default 2: a brisk walk, deliberately not a sprint. */
+  runMultiplier?: number;
+  /**
+   * Acceleration time constant, seconds. Default 0.11. This is the difference
+   * between feeling like a body and feeling like a cursor — instant on/off is
+   * the single biggest tell that you are driving a camera rather than walking.
+   */
+  accel?: number;
+  /**
+   * OPTIONAL soft look limits, degrees from level. Omit — the default — and the
+   * look is FREE, per WALK_IMPLEMENTATION_BRIEF §5: "Being unable to turn your
+   * head reads as claustrophobic; being unable to walk somewhere reads as
+   * furniture." Reach for this only if ceiling coverage proves thin in review,
+   * which is the one case the brief allows it for.
+   */
+  look?: { down: number; up: number };
+  /**
+   * Seconds to ease from the opening shot down onto the walk plane, the first
+   * time the visitor moves. Default 1.1. Set 0 to start on the plane instead.
+   */
+  settle?: number;
+  /**
+   * The walkable region (see walk.ts). Omit it and movement is height-locked
+   * but otherwise unbounded — the right state for authoring a new scan, before
+   * its envelope has been derived. Polygons are in VIEWER WORLD units; every
+   * distance INSIDE the region (falloff, pads, margins) is in METRES.
+   */
+  region?: WalkRegion;
+}
+
+/**
+ * The navigation help behind the stage's i button.
+ *
+ * It lives here rather than in markup because the page copy under a viewer is
+ * unreachable while a scene is open — the page is frozen — so this is the only
+ * place a visitor can find out how to move. Per demo, because a demo with no
+ * walk block is flown rather than walked and wants different words.
+ */
+export interface DemoGuide {
+  /** Small uppercase heading. Defaults to 'Moving around'. */
+  title?: string;
+  /** Rendered as a definition list: the key or gesture, and what it does. */
+  keys: { key: string; action: string }[];
+  /** Optional closing line, set off by a rule. Say what the mode guarantees. */
+  note?: string;
+}
+
 export interface Demo {
   id: string;
   title: string;
@@ -151,6 +235,15 @@ export interface Demo {
    * preserve the authored HORIZONTAL coverage. Defaults to 16/9.
    */
   refAspect?: number;
+  /** Navigation help shown by the stage's i button. Omit and the i is hidden. */
+  guide?: DemoGuide;
+  /**
+   * Height-locked walk movement for this demo (see WalkConfig). Omit for the
+   * legacy free-fly. Only a scene with a KNOWN floor plane and metre scale can
+   * honestly have one — a guessed floor puts the visitor's eyeline in the wrong
+   * place, and then every framing in the room reads subtly wrong.
+   */
+  walk?: WalkConfig;
 }
 
 export const DEMOS: Demo[] = [
@@ -349,6 +442,166 @@ export const DEMOS: Demo[] = [
     src: 'splat/bluedio/meta.json', // SOGS bundle ("Bluedio_optimized.sog", 2,534,528 gaussians)
     cardStyle: 'hud-bottom',
     refAspect: 16 / 9,
+
+    /* The i in the bottom-left corner opens this. It repeats what the copy under
+       the viewer says, and that is not redundant: the two are read at different
+       times. The page copy sells the room to someone scrolling past; this is the
+       only version reachable once a scene is open, because the page is frozen
+       then. Keep them in step. */
+    guide: {
+      title: 'Moving around',
+      keys: [
+        { key: 'Drag', action: 'Look around, as if turning your head' },
+        { key: 'W A S D', action: 'Walk through the room' },
+        { key: 'Shift', action: 'Walk faster' },
+        { key: 'Click a point', action: 'Fly in for a closer look' },
+        { key: 'Esc', action: 'Leave a close-up' },
+        { key: 'Toggle', action: 'Show or hide the points' },
+      ],
+      note:
+        'You stay at standing height throughout, so the room is seen the way you ' +
+        'would see it standing in it.',
+    },
+
+    /* ---- WALK MODE -------------------------------------------------------
+       Bluedio is the one scene whose floor and scale are DERIVED rather than
+       guessed, so it is the one scene that can honestly be height-locked.
+
+         floorY -4.20     the single sharp density plane autoscene found (103k
+                          gaussians in a 4 cm band) at raw .sog y = +4.20,
+                          negated by main.ts's 180° Z roll.
+         unitsPerMetre 3  from Will's LichtFeld anchor: raw y = 0 is 1.40 m above
+                          the floor, and 1.40 / 4.20 = 1/3 m per unit.
+         eyeHeight 1.55   -> world y = -4.20 + 1.55 * 3 = +0.45.
+
+       The 1.55-vs-1.40 tension is the one BLUEDIO_CONTEXT.md flags as needing a
+       decision rather than a silent pick. Decided: 1.55, the spec's value. 1.40
+       sits exactly on the mid capture ring, but 1.55 is BRACKETED by the 1.4 and
+       1.9 m rings, which is the property that matters for a horizontal look.
+       -------------------------------------------------------------------- */
+    walk: {
+      eyeHeight: 1.55,
+      floorY: -4.2,
+      unitsPerMetre: 3,
+
+      /* ---- The walkable region -------------------------------------------
+         Derived by `autoscene/envelope.py`, then hand-corrected against a
+         marked-up copy of the figure it emits. Re-derive rather than editing
+         these numbers:
+
+             cd "Bluedio Experience/autoscene"
+             python envelope.py --edits edits_bluedio.json
+
+         It starts from the same occupancy grid autoscene.py builds, but with
+         three of its defaults changed — autoscene is tuned to decide WHETHER a
+         room deserves walk mode, and this room has already been decided for:
+         a 0.30 m wall inset (the plan boundary is already the gear FACE), a
+         0.32 m pad off the tall console, and no 0.80 m corridor opening, since
+         the falloff already makes a thin passage unattractive without deleting
+         it. That alone takes the region from 2.93 m2 to 8.23 m2.
+
+         Three hand edits then took it to 9.80 m2 (105 sq ft):
+           - the north-east arm widened, which was too thin a sliver to move
+             around in
+           - the east corridor brought up to the console and its chair, whose
+             0.32 m pad had pinched the corridor shut beside the chair. The
+             chair itself stays solid: an `include` relaxes a standoff but is
+             clipped to real free space, so the boundary stops at its surface
+           - a channel south of the dub station, which CLOSES THE LOOP. That is
+             what the single inner ring below is — the dub station can now be
+             walked all the way around. The channel is thin, so it gets its own
+             tighter falloff; see falloffZones.
+
+         The ring is traced from a SMOOTHED distance field. Traced off the raw
+         5 cm grid, its normal snaps 90 degrees every cell, and the falloff acts
+         along that normal — so sliding along a wall would stutter.
+         ------------------------------------------------------------------ */
+      region: {
+        falloff: 0.25,
+        spawnMargin: 0.3,
+        /* The channel south of the dub station is ~0.35 m wide, so the global
+           0.25 m falloff would swallow it whole and there would be no
+           full-speed core to walk down. Box is in WORLD units; falloff is in
+           METRES, like every other distance in this block. */
+        falloffZones: [
+          {
+            min: [-0.75, -4.65],
+            max: [3.75, -2.85],
+            falloff: 0.1,
+            note: 'the thin channel that closes the loop around the dub station',
+          },
+        ],
+        outer: [
+          [-7.225, 5.629],
+          [-7.225, 4.579],
+          [-6.850, 4.204],
+          [-3.850, 4.204],
+          [-3.025, 3.829],
+          [-3.025, -0.071],
+          [-2.800, -0.296],
+          [-2.200, -0.296],
+          [-1.825, -0.671],
+          [-1.825, -1.271],
+          [-2.350, -1.796],
+          [-2.800, -1.796],
+          [-3.025, -2.021],
+          [-3.025, -2.921],
+          [-2.425, -3.521],
+          [-1.975, -4.421],
+          [-1.825, -4.871],
+          [-1.975, -5.771],
+          [-1.750, -5.996],
+          [-1.450, -5.846],
+          [0.650, -5.996],
+          [1.175, -5.021],
+          [3.200, -3.896],
+          [3.650, -2.996],
+          [5.150, -2.546],
+          [5.600, -2.696],
+          [7.100, -2.546],
+          [7.550, -2.696],
+          [8.600, -3.596],
+          [9.125, -3.521],
+          [9.275, -2.621],
+          [9.575, -2.321],
+          [9.725, 0.079],
+          [9.425, 0.829],
+          [9.575, 2.779],
+          [9.050, 3.754],
+          [7.850, 4.204],
+          [7.700, 4.054],
+          [7.100, 4.204],
+          [6.500, 4.954],
+          [5.300, 4.804],
+          [4.400, 5.404],
+          [3.350, 5.254],
+          [1.250, 5.404],
+          [0.350, 4.804],
+          [-0.400, 4.654],
+          [-0.850, 4.804],
+          [-1.900, 5.854],
+          [-7.000, 5.854],
+        ],
+        innerRings: [
+          [
+            [-0.400, 2.404],
+            [-0.175, 2.929],
+            [0.350, 3.304],
+            [2.900, 3.154],
+            [3.575, 2.479],
+            [3.575, 1.729],
+            [4.775, 0.829],
+            [5.075, 0.229],
+            [4.775, -0.671],
+            [3.575, -1.571],
+            [3.425, -2.621],
+            [2.600, -3.296],
+            [0.650, -3.296],
+            [-0.475, -2.621],
+          ],
+        ],
+      },
+    },
 
     /* ---- COORDINATE NOTE - read before pasting anything from scene.json ----
        main.ts rolls every splat entity 180 deg about Z, so a raw .sog point

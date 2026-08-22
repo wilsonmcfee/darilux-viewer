@@ -28,7 +28,8 @@ export class HeroPointManager {
   // centre in front of the very object it labels.
   private hiddenHero: HeroPoint | null = null;
   private screen = new Vec3();
-  private visible = true;
+  private visible = true;        // scene gate: false while a splat streams in
+  private pointsEnabled = true;  // the visitor's own toggle; survives scene loads
 
   // Optional anchored description card that tracks a hero's 3D point.
   private cardEl: HTMLElement | null;
@@ -71,15 +72,36 @@ export class HeroPointManager {
     this.hiddenHero = hero;
   }
 
+  /**
+   * Scene gate — markers are hidden while a splat streams in and shown once it
+   * lands. Deliberately SEPARATE from the visitor's preference below: a scene
+   * load calling setVisible(true) must not quietly switch the points back on
+   * for someone who turned them off.
+   */
   setVisible(v: boolean): void {
     this.visible = v;
-    for (const m of this.markers) m.el.style.display = v ? '' : 'none';
+    this.applyDisplay();
+  }
+
+  /** The visitor's point-visibility toggle. Persists across scene loads. */
+  setPointsEnabled(v: boolean): void {
+    this.pointsEnabled = v;
+    this.applyDisplay();
+  }
+
+  /** Both gates. Markers only exist on screen when each of them is open. */
+  private get shown(): boolean {
+    return this.visible && this.pointsEnabled;
+  }
+
+  private applyDisplay(): void {
+    for (const m of this.markers) m.el.style.display = this.shown ? '' : 'none';
   }
 
   /** Reposition every marker; called each frame after the camera updates. */
   update(): void {
     if (!this.cam.camera) return;
-    if (this.visible) {
+    if (this.shown) {
       for (const m of this.markers) {
         if (m.hero === this.hiddenHero) {
           m.el.style.opacity = '0';

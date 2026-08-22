@@ -9,7 +9,7 @@
    #stage element that main.ts moves into whichever window is live.
    ========================================================================== */
 
-import type { Demo, HeroPoint } from './demos';
+import type { Demo, DemoGuide, HeroPoint } from './demos';
 import { DISCLAIMER_HTML } from './disclaimer';
 
 interface UICallbacks {
@@ -19,6 +19,8 @@ interface UICallbacks {
   onExitViewer: () => void;
   onSelectHero: (hero: HeroPoint) => void;
   onExitCloseup: () => void;
+  /** The bottom-left switch: show or hide the hero-point markers. */
+  onTogglePoints: (on: boolean) => void;
 }
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -26,6 +28,12 @@ const $ = <T extends HTMLElement>(id: string): T => {
   if (!el) throw new Error(`Missing #${id} in index.html`);
   return el as T;
 };
+
+/** Guide copy is plain text authored in demos.ts, so it is escaped rather
+    than injected — unlike a hero card description, which allows inline markup
+    on purpose for its links. */
+const esc = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export class UI {
   private demos: Demo[];
@@ -35,12 +43,15 @@ export class UI {
   private cardTimer?: number;
   private anchoredTimer?: number;
   private loadingTimer?: number;
+  private infoTimer?: number;
+  private guide: DemoGuide | null = null; // the live demo's navigation help
 
   constructor(demos: Demo[], cb: UICallbacks) {
     this.demos = demos;
     this.cb = cb;
     this.wireWindows();
     this.wireStageExit();
+    this.wireStageControls();
     this.wireDisclaimer();
     this.wireHeroCard();
     this.renderSynthList();
@@ -67,10 +78,121 @@ export class UI {
   /** Mark one window live (poster hides via CSS); all others revert to posters. */
   setLive(demoId: string | null): void {
     this.windows.forEach((win, id) => win.classList.toggle('live', id === demoId));
+    this.lockPageScroll(demoId === null ? null : this.windows.get(demoId) ?? null);
+    if (demoId === null) this.hideInfoCard(); // never leave help hanging over a poster
+  }
+
+  /**
+   * Freeze the page while a viewer is open, and release it on exit.
+   *
+   * The viewer is a window embedded partway down a long editorial page, so a
+   * stray wheel or trackpad flick used to slide the whole thing out from under
+   * the visitor mid-scene. While a scene is live the page does not move at all;
+   * the only way out is the stage's own X, which calls setLive(null).
+   *
+   * This is the single choke point on purpose: setLive is already called on
+   * every enter path, every exit path, AND the unsupported-device bail-out, so
+   * the lock cannot be left on by a route that forgot about it.
+   *
+   * Locking with overflow:hidden rather than position:fixed — fixed would need
+   * the scroll offset saved and restored, and jumps on release. Hiding overflow
+   * removes the scrollbar, which would reflow the page sideways, so its width is
+   * paid back as padding. Nested scrollers are untouched: a hero card whose copy
+   * overflows still scrolls on its own #hero-card-body.
+   */
+  private scrollLock: { overflow: string; paddingRight: string } | null = null;
+
+  private lockPageScroll(liveWindow: HTMLElement | null): void {
+    const html = document.documentElement;
+    if (liveWindow) {
+      if (this.scrollLock) return; // already locked; do not stack saved values
+      // Bring the window fully into view BEFORE freezing, or a visitor who
+      // entered from a half-scrolled position is stranded with a clipped scene
+      // and no way to move the page.
+      // 'instant' is load-bearing: style.css sets html { scroll-behavior: smooth },
+      // so the default would ANIMATE this scroll — and the freeze on the next
+      // line cancels it at its starting position, stranding the visitor exactly
+      // where this is meant to rescue them from.
+      const r = liveWindow.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) {
+        liveWindow.scrollIntoView({ block: 'center', behavior: 'instant' });
+      }
+      const gutter = window.innerWidth - html.clientWidth;
+      this.scrollLock = { overflow: html.style.overflow, paddingRight: html.style.paddingRight };
+      html.style.overflow = 'hidden';
+      if (gutter > 0) html.style.paddingRight = `${gutter}px`;
+    } else {
+      if (!this.scrollLock) return;
+      html.style.overflow = this.scrollLock.overflow;
+      html.style.paddingRight = this.scrollLock.paddingRight;
+      this.scrollLock = null;
+    }
   }
 
   private wireStageExit(): void {
     $('stage-exit').addEventListener('click', () => this.cb.onExitViewer());
+  }
+
+  /* ---- Bottom-left stage controls ---------------------------------------- */
+
+  private wireStageControls(): void {
+    const info = $('stage-info');
+    info.addEventListener('click', () => {
+      if ($('info-card').classList.contains('hidden')) this.showInfoCard();
+      else this.hideInfoCard();
+    });
+    $('info-card-close').addEventListener('click', () => this.hideInfoCard());
+
+    // A button with role="switch": aria-checked is the single source of truth
+    // for both the state and the knob position (CSS keys off the attribute), so
+    // the two can never disagree.
+    const toggle = $('points-toggle');
+    toggle.addEventListener('click', () => {
+      const on = toggle.getAttribute('aria-checked') !== 'true';
+      toggle.setAttribute('aria-checked', String(on));
+      this.cb.onTogglePoints(on);
+    });
+  }
+
+  /** Install the live demo's navigation help. Null hides the i entirely. */
+  setGuide(guide: DemoGuide | null): void {
+    this.guide = guide;
+    $('stage-info').classList.toggle('hidden', !guide);
+    if (!guide) this.hideInfoCard();
+    else if (!$('info-card').classList.contains('hidden')) this.renderGuide();
+  }
+
+  private renderGuide(): void {
+    const g = this.guide;
+    if (!g) return;
+    const rows = g.keys
+      .map(
+        (k) =>
+          '<dt>' + esc(k.key) + '</dt><dd>' + esc(k.action) + '</dd>',
+      )
+      .join('');
+    $('info-card-body').innerHTML =
+      '<h3 class="info-card-title">' + esc(g.title ?? 'Moving around') + '</h3>' +
+      '<dl class="info-keys">' + rows + '</dl>' +
+      (g.note ? '<p class="info-note">' + esc(g.note) + '</p>' : '');
+  }
+
+  private showInfoCard(): void {
+    if (!this.guide) return;
+    if (this.infoTimer) window.clearTimeout(this.infoTimer);
+    this.renderGuide();
+    const card = $('info-card');
+    card.classList.remove('hidden');
+    $('stage-info').setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(() => card.classList.add('open'));
+  }
+
+  private hideInfoCard(): void {
+    const card = $('info-card');
+    if (card.classList.contains('hidden')) return;
+    card.classList.remove('open');
+    $('stage-info').setAttribute('aria-expanded', 'false');
+    this.infoTimer = window.setTimeout(() => card.classList.add('hidden'), 300);
   }
 
   // ---- Synth collection list (rendered from demos.ts, the single source
@@ -140,6 +262,12 @@ export class UI {
         return;
       }
       if (e.key !== 'Escape') return;
+      // The help card is the shallowest thing open, so it closes first: one
+      // Escape should not both dismiss it AND drop the visitor out of a close-up.
+      if (!$('info-card').classList.contains('hidden')) {
+        this.hideInfoCard();
+        return;
+      }
       const anyOpen = cardOpen || !$('hero-card-anchored').classList.contains('hidden');
       if (anyOpen) this.cb.onExitCloseup();
     });

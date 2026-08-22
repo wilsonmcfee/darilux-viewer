@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Dark, unlike the reel page: this one is the room, not paper around it. -->
+    <meta name="theme-color" content="#14100c" />
+    <title>Bluedio — Darilux Studio</title>
+    <meta
+      name="description"
+      content="Walk through Bluedio, a dense live room captured in 3D Gaussian splats — drum kit, synth wall, DJ booth. Explore it in your browser, no app required."
+    />
+
+    <!-- Link previews, for a page whose whole job is being shared. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Bluedio — Darilux Studio" />
+    <meta
+      property="og:description"
+      content="Walk through a dense live room captured in 3D Gaussian splats. In your browser, no app required."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Editorial pairing: Fraunces (display serif) + Inter (UI sans). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <!-- ========================================================================
+       STANDALONE BLUEDIO — the same viewer as the reel page, alone and
+       full-bleed, so the link can be shared on its own.
+
+       Everything below is a mount point and a poster. The stage itself (canvas,
+       cards, controls, the X) is injected by stage.ts, so this page cannot drift
+       out of step with index.html when that chrome changes.
+       ====================================================================== -->
+  <body class="solo">
+    <div id="stage-dock" hidden></div>
+
+    <!-- No .ratio-* class: body.solo pins this to the viewport instead. The
+         demo's refAspect stays 16/9, which is what the poses were authored at,
+         and camera.ts widens the fov on any window narrower than that. -->
+    <div class="viewer-window" data-demo="bluedio">
+      <div class="poster">
+        <div class="room"></div>
+        <div class="inner">
+          <div class="kicker">Darilux Studio · 3D Gaussian splat capture</div>
+          <div class="roomname">Bluedio</div>
+          <p class="solo-sub">
+            A dense live room — drum kit, synth wall, DJ booth, red drapes.
+            Walk it at standing height, or fly in to any piece of gear.
+          </p>
+          <button class="enter" type="button"><span class="tri"></span> Step into the room</button>
+          <div class="solo-foot">
+            <button id="disclaimer-open" type="button">About this demo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

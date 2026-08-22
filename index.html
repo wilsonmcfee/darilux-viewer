@@ -25,39 +25,7 @@
          scene is ever live, so only one window hosts the stage at a time.
          It lives in this hidden parking element until the first Enter click.
          ====================================================================== -->
-    <div id="stage-dock" hidden>
-      <div id="stage">
-        <canvas id="viewer"></canvas>
-
-        <!-- Hero-point markers are injected here and positioned each frame. -->
-        <div id="hero-layer" aria-hidden="true"></div>
-
-        <!-- Hero-point description card (HUD variants). -->
-        <aside id="hero-card" class="hidden" role="dialog" aria-label="Gear details">
-          <button id="hero-card-close" class="modal-close" type="button" aria-label="Close">×</button>
-          <!-- Step to the previous / next hero without leaving the card. Shown by
-               ui.ts only when the live demo has more than one hero point. -->
-          <button id="hero-card-prev" class="hero-card-nav prev" type="button" aria-label="Previous point">&lsaquo;</button>
-          <button id="hero-card-next" class="hero-card-nav next" type="button" aria-label="Next point">&rsaquo;</button>
-          <div id="hero-card-body"></div>
-        </aside>
-
-        <!-- Anchored variant: pinned to the hero's 3D point each frame. -->
-        <aside id="hero-card-anchored" class="hidden" role="dialog" aria-label="Gear details">
-          <button id="hero-card-anchored-close" class="modal-close" type="button" aria-label="Close">×</button>
-          <div id="hero-card-anchored-body"></div>
-        </aside>
-
-        <!-- Loading veil shown while a splat streams in. -->
-        <div id="loading" class="hidden">
-          <div class="spinner" role="status" aria-label="Loading scene"></div>
-          <div id="loading-label">Loading…</div>
-        </div>
-
-        <!-- Returns the active window to its poster (and frees the scene). -->
-        <button id="stage-exit" type="button" aria-label="Leave the room">×</button>
-      </div>
-    </div>
+    <div id="stage-dock" hidden></div>
 
     <!-- ======================================================================
          PAGE
@@ -236,7 +204,7 @@
           <span><b>Live room</b> — drums, synth wall, DJ booth</span>
         </div>
 
-        <h2 class="guide-title">Guide: Use left click to drag the camera around the scene, right click to strafe<br>WASD to fly through the scene, Q to go down, E to go up</h2>
+        <h2 class="guide-title">Guide: Drag to look around, WASD to walk, Shift to hurry<br>You stay at standing height — the room is seen the way you would see it</h2>
       </div>
     </section>
 
@@ -247,26 +215,6 @@
       </div>
     </footer>
 
-    <!-- Disclaimer modal (content set in ui.ts; copy lives in DISCLAIMER-DRAFT.md). -->
-    <div id="disclaimer" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="disclaimer-title">
-      <div class="modal-card">
-        <button id="disclaimer-close" class="modal-close" type="button" aria-label="Close">×</button>
-        <div id="disclaimer-body"></div>
-      </div>
-    </div>
-
-    <!-- Fallback overlay when the device can't render splats at all. -->
-    <div id="unsupported" class="modal hidden" role="dialog" aria-modal="true">
-      <div class="modal-card">
-        <h2>This experience needs a modern browser</h2>
-        <p>
-          These interactive captures render with WebGL2 / WebGPU. Your current browser
-          doesn't support them — most often this happens inside an in-app browser
-          (opening the link from a chat app) or on an older device.
-        </p>
-        <p><strong>Try:</strong> open this link directly in Chrome or Safari, or update to a recent version.</p>
-      </div>
-    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

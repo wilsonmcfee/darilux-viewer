@@ -307,6 +307,205 @@ button { font-family: var(--sans); }
 }
 #stage-exit:hover { color: var(--shell-ink); border-color: rgba(242, 237, 229, 0.5); }
 
+/* ---- Standalone page (bluedio.html): one viewer, full-bleed ---------------- */
+/* The reel page frames its viewers as objects set into paper. This page IS the
+   viewer, so the frame, the radius and the paper all go, and the window is
+   pinned to the viewport instead of taking an aspect-ratio box. */
+body.solo {
+  background: var(--shell);
+  overflow: hidden; /* nothing to scroll here — the viewer is the whole page */
+}
+body.solo .viewer-window {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.solo-sub {
+  max-width: 46ch;
+  margin: 0 auto 26px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--shell-ink-muted);
+}
+.solo-foot { margin-top: 30px; }
+.solo-foot button {
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--shell-ink-muted);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--shell-line);
+  padding-bottom: 3px;
+  cursor: pointer;
+  transition: color 0.3s var(--ease), border-color 0.3s var(--ease);
+}
+.solo-foot button:hover {
+  color: var(--shell-ink);
+  border-color: rgba(242, 237, 229, 0.5);
+}
+
+@media (max-width: 820px) {
+  .solo-sub { font-size: 14px; margin-bottom: 22px; padding: 0 20px; }
+  .solo-foot { margin-top: 24px; }
+}
+
+/* ---- Bottom-left stage controls: navigation help + point visibility -------- */
+#stage-controls {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stage-ctl {
+  position: relative; /* anchors the tooltip */
+  display: grid;
+  place-items: center;
+  color: var(--shell-ink-muted);
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--shell-line);
+  cursor: pointer;
+  transition: color 0.3s var(--ease), border-color 0.3s var(--ease);
+}
+.stage-ctl:hover { color: var(--shell-ink); border-color: rgba(242, 237, 229, 0.5); }
+
+#stage-info {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  line-height: 1;
+}
+#stage-info[aria-expanded='true'] {
+  color: var(--shell-ink);
+  border-color: rgba(242, 237, 229, 0.5);
+}
+
+/* A button rather than a checkbox, so it can carry the same glass treatment as
+   its neighbour; role="switch" + aria-checked supplies the semantics, and the
+   knob position is driven off aria-checked so state lives in exactly one place. */
+#points-toggle {
+  width: 54px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  padding: 0 7px;
+}
+.switch-track { position: relative; display: block; width: 100%; height: 14px; }
+.switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translate(0, -50%);
+  transition: transform 0.22s var(--ease);
+}
+/* ON uses --accent, the same red as the dot at the centre of a hero marker, so
+   the control reads as being about those points rather than about the scene. */
+#points-toggle[aria-checked='true'] {
+  color: var(--accent);
+  border-color: rgba(184, 57, 46, 0.55);
+}
+#points-toggle[aria-checked='true'] .switch-knob { transform: translate(26px, -50%); }
+
+/* Native title has a ~1s delay and OS chrome; this matches the shell. */
+.stage-ctl[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 9px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--shell-ink);
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--shell-line);
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s var(--ease);
+}
+.stage-ctl[data-tip]:hover::after,
+.stage-ctl[data-tip]:focus-visible::after { opacity: 1; }
+
+/* ---- Navigation help card (opened by the i) -------------------------------- */
+#info-card {
+  position: absolute;
+  left: 14px;
+  bottom: 58px;
+  z-index: 29;
+  width: min(330px, calc(100% - 28px));
+  max-height: calc(100% - 84px);
+  overflow-y: auto;
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--shell-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 22px 18px;
+  color: var(--shell-ink);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+}
+#info-card.open { opacity: 1; transform: translateY(0); }
+#info-card .modal-close { top: 10px; right: 12px; font-size: 22px; color: var(--shell-ink); }
+
+.info-card-title {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--shell-ink-muted);
+  margin-bottom: 14px;
+}
+.info-keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px 14px;
+  align-items: baseline;
+}
+.info-keys dt {
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--shell-ink);
+  white-space: nowrap;
+  padding: 2px 7px;
+  border: 1px solid var(--shell-line);
+  border-radius: 3px;
+  justify-self: start;
+}
+.info-keys dd { font-size: 13.5px; line-height: 1.45; color: var(--shell-ink-muted); }
+.info-note {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid var(--shell-line);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--shell-ink-muted);
+}
+
 /* ---- Hero-point markers (live 3D pins, positioned each frame) -------------- */
 /* The marker box must be EXACTLY the dot. heropoints.ts writes the projected 3D
    point to left/top and translate(-50%, -50%) centres THIS ELEMENT on it, so
@@ -902,6 +1101,17 @@ button { font-family: var(--sans); }
   .hero-card-specs { gap: 6px; }
   .hero-card-specs dt,
   .hero-card-specs dd { font-size: 12.5px; }
+
+  #stage-controls { left: 10px; bottom: 10px; gap: 8px; }
+  #info-card {
+    left: 10px;
+    right: 10px;
+    bottom: 54px;
+    width: auto;
+    max-height: 55%;
+    padding: 16px 18px 15px;
+  }
+  .info-keys dd { font-size: 13px; }
 
   #hero-card-anchored { padding: 14px 16px; }
   #hero-card-anchored .hero-card-title { font-size: 17px; }
