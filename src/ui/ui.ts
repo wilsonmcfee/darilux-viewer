@@ -39,7 +39,13 @@ const esc = (s: string): string =>
 export class UI {
   private demos: Demo[];
   private cb: UICallbacks;
+  private root: HTMLElement;
   private windows = new Map<string, HTMLElement>(); // demoId → .viewer-window
+  /* Listeners attached to PAGE-owned elements (enter buttons, the synth list,
+     #disclaimer-open, window keydowns). Everything else lives on injected
+     chrome and dies with it; these survive #stage removal and must be removed
+     explicitly by dispose(), or a destroyed viewer keeps reacting to clicks. */
+  private disposers: Array<() => void> = [];
   private cardHero: HeroPoint | null = null; // hero the open #hero-card describes
   private cardTimer?: number;
   private anchoredTimer?: number;
@@ -53,9 +59,10 @@ export class UI {
   private guide: DemoGuide | null = null;      // desktop / keyboard copy
   private guideTouch: DemoGuide | null = null; // touch copy, when the demo has one
 
-  constructor(demos: Demo[], cb: UICallbacks) {
+  constructor(demos: Demo[], cb: UICallbacks, root: HTMLElement = document.body) {
     this.demos = demos;
     this.cb = cb;
+    this.root = root;
     this.wireWindows();
     this.wireStageExit();
     this.wireStageControls();
@@ -66,12 +73,15 @@ export class UI {
 
   // ---- Viewer windows (the bespoke frames) ---------------------------------
   private wireWindows(): void {
-    document.querySelectorAll<HTMLElement>('.viewer-window[data-demo]').forEach((win) => {
+    this.root.querySelectorAll<HTMLElement>('.viewer-window[data-demo]').forEach((win) => {
       const id = win.dataset.demo!;
       this.windows.set(id, win);
-      win.querySelector<HTMLButtonElement>('.enter')?.addEventListener('click', () => {
-        this.cb.onEnterViewer(id);
-      });
+      const btn = win.querySelector<HTMLButtonElement>('.enter');
+      if (btn) {
+        const onEnter = (): void => this.cb.onEnterViewer(id);
+        btn.addEventListener('click', onEnter);
+        this.disposers.push(() => btn.removeEventListener('click', onEnter));
+      }
     });
   }
 
@@ -233,7 +243,11 @@ export class UI {
     // Clicking a synth in the list enters the viewer (if needed) and flies to it.
     list.querySelectorAll<HTMLElement>('li[data-hero]').forEach((li) => {
       const hero = demo.heroPoints.find((h) => h.id === li.dataset.hero);
-      if (hero) li.addEventListener('click', () => this.cb.onSelectHero(hero));
+      if (hero) {
+        const onPick = (): void => this.cb.onSelectHero(hero);
+        li.addEventListener('click', onPick);
+        this.disposers.push(() => li.removeEventListener('click', onPick));
+      }
     });
   }
 
@@ -269,7 +283,7 @@ export class UI {
     $('hero-card-prev').addEventListener('click', () => this.stepHero(-1));
     $('hero-card-next').addEventListener('click', () => this.stepHero(1));
 
-    window.addEventListener('keydown', (e) => {
+    const onKey = (e: KeyboardEvent): void => {
       const cardOpen = !$('hero-card').classList.contains('hidden');
       if (cardOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         // Camera fly keys are WASD/QE, so the arrows are free for the stepper.
@@ -286,7 +300,9 @@ export class UI {
       }
       const anyOpen = cardOpen || !$('hero-card-anchored').classList.contains('hidden');
       if (anyOpen) this.cb.onExitCloseup();
-    });
+    };
+    window.addEventListener('keydown', onKey);
+    this.disposers.push(() => window.removeEventListener('keydown', onKey));
   }
 
   /**
@@ -388,13 +404,36 @@ export class UI {
     const modal = $('disclaimer');
     const open = () => modal.classList.remove('hidden');
     const close = () => modal.classList.add('hidden');
-    $('disclaimer-open').addEventListener('click', open);
+    const opener = $('disclaimer-open');
+    opener.addEventListener('click', open);
+    this.disposers.push(() => opener.removeEventListener('click', open));
     $('disclaimer-close').addEventListener('click', close);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) close();
     });
-    window.addEventListener('keydown', (e) => {
+    const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') close();
-    });
+    };
+    window.addEventListener('keydown', onKey);
+    this.disposers.push(() => window.removeEventListener('keydown', onKey));
+  }
+
+  /**
+   * Remove every listener attached to PAGE-owned elements and release the
+   * scroll lock. Called by the viewer's destroy(); the injected chrome is
+   * removed separately, taking its own listeners with it.
+   */
+  dispose(): void {
+    for (const d of this.disposers) d();
+    this.disposers.length = 0;
+    // NOT setLive(null): the injected chrome is already gone by the time
+    // destroy() calls this, and setLive resolves chrome ids. The lock is the
+    // one page-level thing to put back directly.
+    this.lockPageScroll(null);
+    this.windows.forEach((win) => win.classList.remove('live'));
+    if (this.cardTimer) window.clearTimeout(this.cardTimer);
+    if (this.anchoredTimer) window.clearTimeout(this.anchoredTimer);
+    if (this.loadingTimer) window.clearTimeout(this.loadingTimer);
+    if (this.infoTimer) window.clearTimeout(this.infoTimer);
   }
 }

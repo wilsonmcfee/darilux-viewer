@@ -21,16 +21,14 @@ import {
   Application,
   Entity,
   Color,
-  CameraFrame,
   TONEMAP_NONE,
   FILLMODE_NONE,
   RESOLUTION_AUTO,
 } from 'playcanvas';
 import '../styles/index.css';
 
-import { BRAND, DEMOS } from '../demos';
-import type { HeroPoint } from '../types';
-import { setBrand, logTag } from './brand';
+import type { Demo, HeroPoint } from '../types';
+import { setBrand, logTag, type Brand } from './brand';
 import { createDevice, canRender } from './device';
 import { OrbitFlyCamera } from './camera';
 import { SceneLoader } from './sceneloader';
@@ -39,19 +37,10 @@ import { HeroPointManager } from '../nav/heropoints';
 import { mountChrome } from './stage';
 import { TouchSticks, wantsTouchControls } from '../nav/joystick';
 import { PerfHud } from '../ui/perfhud';
-import {
-  SplatQualityControl,
-  MOBILE_PRESET,
-  LAST_PASS_PRESET,
-  ENGINE_DEFAULTS,
-  type SplatQuality,
-} from './splatquality';
+import { SplatQualityControl, MOBILE_PRESET } from './splatquality';
+import { installKnobs } from './knobs';
 import { mountPhoneDock } from '../ui/phonedock';
 import { UI } from '../ui/ui';
-
-// Hand the deployment's identity to the engine before anything logs or renders
-// brand-flavoured copy. Module top-level so it precedes every boot path.
-setBrand(BRAND);
 
 /* Authoring is a TOOL, not a viewer feature, and it is gated at BUILD time as
    well as at runtime: with this false, the dynamic import below is dead code,
@@ -60,7 +49,45 @@ setBrand(BRAND);
    it; VITE_AUTHORING=1 forces it into a production build that needs the rig. */
 const AUTHORING = import.meta.env.DEV || import.meta.env.VITE_AUTHORING === '1';
 
-function boot(): void {
+export interface ViewerOptions {
+  /**
+   * The element whose `.viewer-window[data-demo]` frames this viewer serves.
+   * Usually document.body. NOTE the chrome still resolves ids globally
+   * (#stage-dock, #stage, the modals), so there is at most ONE viewer per
+   * page at a time — destroy() releases everything so a second can mount.
+   */
+  mount: HTMLElement;
+  /** This deployment's scene config — what demos.ts holds today. */
+  scenes: Demo[];
+  /** Console log prefix + disclaimer signature. Defaults to a neutral 'viewer'. */
+  brand?: Brand;
+  /** A visitor entered a scene (analytics hook). */
+  onEnter?: (sceneId: string) => void;
+  /** A visitor opened a hero close-up (analytics hook). */
+  onHeroOpen?: (sceneId: string, heroId: string) => void;
+}
+
+export interface Viewer {
+  /** Enter a scene by id, exactly as clicking its window's Enter would. */
+  load(sceneId: string): Promise<void>;
+  /** Fly to a hero point by id (entering its scene first if needed). */
+  goToHero(heroId: string): void;
+  /**
+   * Tear the viewer down completely: unload the scene, destroy the engine and
+   * its GPU device, remove the injected chrome and every listener — including
+   * the window-level ones. Without this the viewer cannot mount twice in one
+   * page lifetime: the WebGL context leaks and the second mount fails, which
+   * kills any client-side-routed embedding.
+   */
+  destroy(): void;
+}
+
+export function createViewer(opts: ViewerOptions): Viewer {
+  const scenes = opts.scenes;
+  // Hand the deployment's identity to the engine before anything logs or
+  // renders brand-flavoured copy.
+  setBrand(opts.brand ?? { name: 'Viewer', tag: 'viewer' });
+
   // The stage chrome is shared markup, injected rather than pasted into each
   // page (see stage.ts). This MUST run before anything resolves an id from it:
   // UI's constructor looks every one of them up eagerly and throws on a miss.
@@ -211,7 +238,7 @@ function boot(): void {
     controller.setHeroFrameLift(cardOverScene ? heroLift : 0);
   }
 
-  const ui = new UI(DEMOS, {
+  const ui = new UI(scenes, {
     onEnterViewer: (demoId) => enterViewer(demoId),
     onExitViewer: () => exitViewer(),
     onSelectHero: (hero) => selectHero(hero),
@@ -264,6 +291,7 @@ function boot(): void {
      from the first Enter, and kept alongside it rather than replacing it — the
      observer still owns the case this cannot see, which is the stage being
      reparented between two differently-sized windows at one viewport size. */
+  const mqDisposers: Array<() => void> = [];
   for (const q of ['(max-width: 820px)', '(pointer: coarse)']) {
     const mq = window.matchMedia?.(q);
     // addEventListener on MediaQueryList is Safari 14+; addListener is the
@@ -272,9 +300,21 @@ function boot(): void {
       refreshSticks();
       refreshHeroFraming();
     };
-    if (mq?.addEventListener) mq.addEventListener('change', onChange);
-    else mq?.addListener?.(onChange);
+    if (mq?.addEventListener) {
+      mq.addEventListener('change', onChange);
+      mqDisposers.push(() => mq.removeEventListener('change', onChange));
+    } else if (mq?.addListener) {
+      mq.addListener(onChange);
+      mqDisposers.push(() => mq.removeListener?.(onChange));
+    }
   }
+
+  // Set by destroy(); makes every entry point a no-op afterwards, so a stray
+  // reference to a dead viewer cannot resurrect half of it.
+  let destroyed = false;
+  // The stage's ResizeObserver, created in ensureApp — hoisted so destroy()
+  // can disconnect it.
+  let ro: ResizeObserver | null = null;
 
   // ---- Lazy engine creation -------------------------------------------------
   async function ensureApp(): Promise<boolean> {
@@ -365,175 +405,31 @@ function boot(): void {
       (v) => controller!.setLookAxis(v.x, v.y),
     );
 
-    /* ---- Sharpen A/B (authoring aid) -------------------------------------
-       PlayCanvas ships AMD CAS (Contrast Adaptive Sharpening) in CameraFrame's
-       compose pass. CAS sharpens low-contrast regions hard and backs off on
-       high-contrast edges, so it avoids the halo ringing a naive unsharp mask
-       would put around every gaussian.
-
-       OFF BY DEFAULT, and deliberately not merely disabled: with no ?sharpen
-       param no CameraFrame is constructed at all, so the three client demos
-       render through the exact same path as before this was added. Constructing
-       a CameraFrame installs framePasses and switches the camera to an
-       offscreen HDR target + compose pass.
-
-         ?sharpen=0.3     set the starting amount (0..1, 0 = off)
-         __sharpen(0.4)   change it live in the console, no reload
-         __sharpen(0)     tear the pass back down and release its resources
-
-       toneMapping is pinned to the camera's TONEMAP_NONE. CameraFrame defaults
-       rendering.toneMapping to TONEMAP_LINEAR, which would shift colour the
-       moment sharpening turned on and make the A/B a comparison of two things
-       at once.
-       -------------------------------------------------------------------- */
-    let camFrame: CameraFrame | null = null;
-    const setSharpen = (amount: number): number => {
-      const v = Math.max(0, Math.min(1, Number(amount) || 0));
-      if (v === 0) {
-        if (camFrame) camFrame.enabled = false;
-        return 0;
-      }
-      if (!camFrame) camFrame = new CameraFrame(app!, camera.camera!);
-      camFrame.enabled = true;
-      camFrame.rendering.toneMapping = TONEMAP_NONE;
-      camFrame.rendering.sharpness = v;
-      camFrame.update();
-      return v;
-    };
-    (window as unknown as { __sharpen: (n: number) => number }).__sharpen = setSharpen;
-
-    const sharpenParam = Number(
-      new URLSearchParams(window.location.search).get('sharpen') ?? '0',
-    );
-    if (sharpenParam > 0) setSharpen(sharpenParam);
-
-    /* ?fov=70 — the portrait field-of-view ceiling, as a URL param.
-       It duplicates __maxFov() on purpose. The 80° default in camera.ts is the
-       one number in the mobile pass that is a judgement rather than a
-       derivation, so it has to be settled by holding a PHONE — and a phone is
-       exactly where a console knob is out of reach. A param can be typed into
-       the address bar and A/B'd by editing one character, which is the whole
-       difference between "tunable" and "tunable in principle".
-       Same reading as ?sharpen: absent or unparseable leaves the default. */
-    const fovParam = Number(new URLSearchParams(window.location.search).get('fov') ?? '0');
-    if (fovParam > 20) controller.setMaxFov(fovParam);
-
-    /* ?look=60 and ?lift=0.2 — the two remaining feel numbers, on the same
-       reasoning as ?fov: both were judged by holding a phone, so both have to be
-       adjustable from one. `lift` reads NaN-safely because 0 is a MEANINGFUL
-       value here (it turns the lift off), so it cannot use the `> 0` guard the
-       other two do. */
-    const lookParam = Number(new URLSearchParams(window.location.search).get('look') ?? '0');
-    if (lookParam > 0) controller.setLookRate(lookParam);
-
-    const liftRaw = new URLSearchParams(window.location.search).get('lift');
-    if (liftRaw !== null && Number.isFinite(Number(liftRaw))) heroLift = Number(liftRaw);
-    refreshHeroFraming();
-
     // Walk mode is OFF in authoring mode: you cannot author a hero pose 2.4 m
     // up from a body that cannot leave the floor, and orbit/fly exist precisely
     // as authoring tools. __walk(1) puts it back so a framing can be checked at
     // standing height without dropping ?author.
     controller.setWalkEnabled(!authorMode);
 
-    // Walk-mode knobs. __eyeHeight() is the one to reach for: the 1.55 m in
-    // demos.ts is a reasoned choice, not a measured fact, and it should be
-    // settled against real WebGPU frames rather than argued about on paper.
-    (window as unknown as { __walk: (on: unknown) => void }).__walk = (on) =>
-      controller!.setWalkEnabled(Boolean(Number(on)));
-    (window as unknown as { __eyeHeight: (m?: number) => number | null }).__eyeHeight = (m) => {
-      if (m === undefined) return controller!.eyeHeightMetres;
-      return controller!.setEyeHeight(m);
-    };
-    // Signed distance to the walk boundary + the backstop counter (brief §8).
-    (window as unknown as { __walkDebug: () => unknown }).__walkDebug = () =>
-      controller!.walkDebug;
-    /* Portrait fov knob. The 80° ceiling in camera.ts is the one number in the
-       mobile pass that is a judgement rather than a derivation, so it gets a
-       live handle: hold the phone, run __maxFov(70) and __maxFov(95), and pick.
-       __maxFov() with no argument just reports what is being rendered, which is
-       the fastest way to tell an authored fov from a compensated one. */
-    (window as unknown as { __maxFov: (n?: number) => unknown }).__maxFov = (n) => {
-      if (n === undefined) return controller!.fovDebug;
-      controller!.setMaxFov(n);
-      return controller!.fovDebug;
-    };
-    // Force the touch pads on or off regardless of the device (?touch=1 does the
-    // same from the URL, which is the one that survives a page load on a phone).
-    // Also re-decides the hero lift, which keys off the same override.
-    (window as unknown as { __sticks: (on: unknown) => void }).__sticks = (on) => {
-      stickOverride = Boolean(Number(on));
-      refreshSticks();
-      refreshHeroFraming();
-    };
-    /* Look-stick top speed, degrees/second at full deflection. 105 tested "much
-       too sensitive" on a phone and is now 75; this is how the next 10° gets
-       found without a rebuild. ?look=N does the same from the URL. */
-    (window as unknown as { __lookRate: (n?: number) => number }).__lookRate = (n) =>
-      controller!.setLookRate(n ?? NaN);
-    /* How far a close-up lifts its subject above centre, as a fraction of frame
-       height, so the card cannot cover the gear. Only active on the mobile card
-       layout. __heroLift(0) turns it off for an immediate A/B. */
-    (window as unknown as { __heroLift: (n?: number) => number }).__heroLift = (n) => {
-      if (n !== undefined) heroLift = Number(n);
-      refreshHeroFraming();
-      return heroLift;
-    };
-
-    /* ---- The frame-time readout -----------------------------------------
-       `?stats` from the URL, `__stats(1)` from a console. The URL form is the
-       one that matters: it is the only one that survives being typed on a
-       phone, and the phone is the only place the number is interesting.
-
-       This is deliberately NOT gated behind ?author. Authoring mode turns walk
-       mode OFF (see the note above), and walking is exactly when the sort and
-       fill costs peak — so measuring under ?author would measure the wrong
-       thing. The two flags are orthogonal and both are usable at once. */
-    const statsParam = /(^|[?&#])stats(=1|[&#]|$)/i.test(
-      window.location.search + window.location.hash,
-    );
-    if (statsParam) perf.setEnabled(true);
-    (window as unknown as { __stats: (on?: unknown) => boolean }).__stats = (on) =>
-      perf.setEnabled(on === undefined ? !perf.isEnabled : Boolean(Number(on)));
-
-    /* ---- The splat cost/quality knobs, live ------------------------------
-       These are the numbers that trade image quality for frame time, and every
-       one of them is a judgement that wants the phone it is for. Before this
-       existed they could only be changed by editing source and redeploying,
-       which is why the project got this far having never tuned one.
-
-         __splat()                            report current values, and which
-                                              of them this device honours
-         __splat({ alphaClipForward: 0.06 })  set one or more
-         __splat('mobile')                    the current preset
-         __splat('off')                       engine stock
-         __splat('lastpass')                  the OLD mobile preset — the one
-                                              judged too aggressive on the phone
-
-       Pair with `?stats` and read the effect on the same screen. The honest A/B
-       is `__splat('lastpass')` against `__splat('mobile')` while walking: that
-       is the exact change this pass made, in one call each way, and it is the
-       one to run if the pendulum is ever suspected of having swung too far back
-       toward quality.
-
-       Safe to call interactively with ONE exception: `antiAlias` forces a
-       shader recompile (not a work-buffer rebuild), so expect a hitch on the
-       call that changes it. Everything else routes through paths that do not
-       set `scene.gsplat.dirty`. Checked and noted in splatquality.ts — do not
-       add a knob here without checking which bucket it is in. */
-    (window as unknown as { __splat: (q?: unknown) => unknown }).__splat = (q) => {
-      if (!quality) return 'no engine yet — enter a viewer first';
-      if (q === 'mobile') quality.apply(MOBILE_PRESET);
-      else if (q === 'lastpass' || q === 'old') quality.apply(LAST_PASS_PRESET);
-      else if (q === 'off' || q === 'reset') quality.apply(ENGINE_DEFAULTS);
-      else if (q && typeof q === 'object') quality.apply(q as SplatQuality);
-      // Every path above can change what is on screen without moving the
-      // camera, which under on-demand rendering means nothing would redraw and
-      // the knob would look broken. This is the whole reason wake() is not
-      // private to the frame loop.
-      wake();
-      return quality.report();
-    };
+    /* The live tuning surface — URL params (?sharpen/?fov/?look/?lift/?stats)
+       and every __knob console handle — lives in core/knobs.ts. */
+    installKnobs({
+      app,
+      camera,
+      controller,
+      perf,
+      quality: () => quality,
+      wake,
+      refreshSticks: () => refreshSticks(),
+      refreshHeroFraming: () => refreshHeroFraming(),
+      getHeroLift: () => heroLift,
+      setHeroLift: (n) => {
+        heroLift = n;
+      },
+      setStickOverride: (on) => {
+        stickOverride = on;
+      },
+    });
 
     // The ?author rig — crosshair, pose panel, splat-snap anchor picking —
     // lives in core/authoring.ts and only exists in builds where AUTHORING is
@@ -664,7 +560,7 @@ function boot(): void {
     // ---- Resize: track the HOST WINDOW, not the browser window ---------------
     // The stage is reparented between differently-sized windows, so a
     // ResizeObserver (which also fires on reparent) keeps the buffer in sync.
-    const ro = new ResizeObserver(() => {
+    ro = new ResizeObserver(() => {
       // When the stage is parked in the hidden dock (viewer closed) it
       // measures 0×0. Resizing the swapchain to zero creates invalid WebGPU
       // textures and every subsequent frame submits an invalid command
@@ -692,12 +588,14 @@ function boot(): void {
 
   // ---- Entering / leaving a viewer window -----------------------------------
   async function enterViewer(demoId: string): Promise<void> {
-    const demo = DEMOS.find((d) => d.id === demoId);
+    if (destroyed) return;
+    const demo = scenes.find((d) => d.id === demoId);
     if (!demo) {
       console.error(`${logTag()} unknown demo "${demoId}"`);
       return;
     }
     if (loader.activeDemo?.id === demoId) return;
+    opts.onEnter?.(demoId);
 
     // Move the stage into the chosen window FIRST (its poster hides via `.live`)
     // so the canvas has a real size when the graphics device is created.
@@ -742,7 +640,7 @@ function boot(): void {
   // click while the window shows its poster), enter the viewer first and fly
   // once the splat has loaded.
   function selectHero(hero: HeroPoint): void {
-    const owner = DEMOS.find((d) => d.heroPoints.includes(hero));
+    const owner = scenes.find((d) => d.heroPoints.includes(hero));
     if (!owner) return;
     if (loader.activeDemo?.id !== owner.id) {
       loader.pendingHero = hero;
@@ -801,6 +699,8 @@ function boot(): void {
   }
 
   function flyToHero(hero: HeroPoint): void {
+    if (destroyed) return;
+    opts.onHeroOpen?.(loader.activeDemo?.id ?? '', hero.id);
     // Show whatever was hidden before (stepping between heroes) and record the
     // new one so an interrupted fly-in still hides it (see onUserInteract).
     heroes!.setHiddenHero(null);
@@ -883,6 +783,49 @@ function boot(): void {
     refreshSticks();
   }
 
-}
+  // ---- The public handle ------------------------------------------------------
+  function destroy(): void {
+    if (destroyed) return;
+    destroyed = true;
+    // Scene first (frees GPU + JS memory), then the machinery.
+    exitCloseupUI();
+    loader.unload();
+    loader.activeDemo = null;
+    loader.pendingHero = null;
+    ui.setLive(null); // releases the page scroll lock
+    ro?.disconnect();
+    ro = null;
+    for (const d of mqDisposers) d();
+    mqDisposers.length = 0;
+    controller?.detach(); // the window-level key/pointer listeners
+    controller = null;
+    heroes = null;
+    sticks = null;
+    // Destroys the frame loop, the assets registry, and the graphics device —
+    // this is what releases the WebGL/WebGPU context so a second mount can
+    // create a fresh one.
+    app?.destroy();
+    app = null;
+    // Remove the injected chrome and modals; a second createViewer() re-injects
+    // them fresh, with fresh listeners. Page-owned listeners go via dispose().
+    document.getElementById('stage')?.remove();
+    document.getElementById('disclaimer')?.remove();
+    document.getElementById('unsupported')?.remove();
+    ui.dispose();
+  }
 
-boot();
+  return {
+    load: (sceneId: string) => enterViewer(sceneId),
+    goToHero: (heroId: string) => {
+      for (const demo of scenes) {
+        const hero = demo.heroPoints.find((h) => h.id === heroId);
+        if (hero) {
+          selectHero(hero);
+          return;
+        }
+      }
+      console.error(`${logTag()} unknown hero "${heroId}"`);
+    },
+    destroy,
+  };
+}

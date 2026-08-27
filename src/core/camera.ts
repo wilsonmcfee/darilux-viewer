@@ -762,6 +762,23 @@ export class OrbitFlyCamera {
     window.addEventListener('blur', this.onWindowBlur);
   }
 
+  /**
+   * Remove every listener attachInput() added. The canvas ones would die with
+   * the canvas, but the WINDOW ones would not — a destroyed viewer must not go
+   * on reading the keyboard. Called by the viewer's destroy().
+   */
+  detach(): void {
+    const c = this.canvas;
+    c.removeEventListener('pointerdown', this.onPointerDown);
+    c.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerUp);
+    window.removeEventListener('pointercancel', this.onPointerUp);
+    c.removeEventListener('wheel', this.onWheel);
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onWindowBlur);
+  }
+
   private onKeyDown = (e: KeyboardEvent): void => {
     // Leave browser/DevTools shortcuts (Ctrl/Cmd/Alt combos) alone.
     if (e.metaKey || e.ctrlKey || e.altKey) return;
