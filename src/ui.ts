@@ -11,6 +11,7 @@
 
 import type { Demo, DemoGuide, HeroPoint } from './demos';
 import { DISCLAIMER_HTML } from './disclaimer';
+import { wantsTouchControls } from './joystick';
 
 interface UICallbacks {
   /** Visitor clicked "Enter" on a window. */
@@ -44,7 +45,13 @@ export class UI {
   private anchoredTimer?: number;
   private loadingTimer?: number;
   private infoTimer?: number;
-  private guide: DemoGuide | null = null; // the live demo's navigation help
+  // Both of the live demo's guides are held, and the choice between them is made
+  // at RENDER time rather than at set time. A phone that rotates, or a desktop
+  // window dragged across the breakpoint, changes the answer — and latching it
+  // when the scene loaded would leave a visitor reading about W A S D on a
+  // touch screen (or about thumb sticks on a laptop) with no way to correct it.
+  private guide: DemoGuide | null = null;      // desktop / keyboard copy
+  private guideTouch: DemoGuide | null = null; // touch copy, when the demo has one
 
   constructor(demos: Demo[], cb: UICallbacks) {
     this.demos = demos;
@@ -154,16 +161,25 @@ export class UI {
     });
   }
 
-  /** Install the live demo's navigation help. Null hides the i entirely. */
-  setGuide(guide: DemoGuide | null): void {
+  /**
+   * Install the live demo's navigation help. Null (for both) hides the i.
+   * `touch` is optional; without it a touch visitor falls back to `guide`.
+   */
+  setGuide(guide: DemoGuide | null, touch: DemoGuide | null = null): void {
     this.guide = guide;
-    $('stage-info').classList.toggle('hidden', !guide);
-    if (!guide) this.hideInfoCard();
+    this.guideTouch = touch;
+    const any = Boolean(guide ?? touch);
+    $('stage-info').classList.toggle('hidden', !any);
+    if (!any) this.hideInfoCard();
     else if (!$('info-card').classList.contains('hidden')) this.renderGuide();
   }
 
   private renderGuide(): void {
-    const g = this.guide;
+    // Touch copy wins on a touch-shaped viewport, and either falls back to the
+    // other so a demo that has only one still gets its i button.
+    const g = wantsTouchControls()
+      ? this.guideTouch ?? this.guide
+      : this.guide ?? this.guideTouch;
     if (!g) return;
     const rows = g.keys
       .map(
@@ -178,7 +194,7 @@ export class UI {
   }
 
   private showInfoCard(): void {
-    if (!this.guide) return;
+    if (!this.guide && !this.guideTouch) return;
     if (this.infoTimer) window.clearTimeout(this.infoTimer);
     this.renderGuide();
     const card = $('info-card');
@@ -306,6 +322,23 @@ export class UI {
 
   showHeroCard(hero: HeroPoint, placement: 'left' | 'bottom' = 'left', demoId = ''): void {
     const card = $('hero-card');
+    /* The two cards are mutually exclusive, and THIS is the choke point that
+       makes them so. Nothing enforced it before: showInfoCard() never hid the
+       gear card and this never hid the help card. That was survivable
+       full-bleed, where the two sat at opposite corners of a tall stage. The
+       docked layout centres BOTH on the same point in the dock, and #info-card
+       (z-index 29) paints over #hero-card (28) — so reading the help card and
+       then tapping a piece of gear flew the camera to it and left the help copy
+       sitting on top, hiding the gear card completely INCLUDING its close
+       button. The only way out was the other card's × in the opposite corner,
+       which is not something a visitor would find.
+
+       Fixed here rather than at the call site because every route into a gear
+       card goes through this method, and the reverse direction is closed
+       differently: the i is not reachable during a close-up at all on the
+       docked page (the dock's data-state hides the controls row), so the help
+       card can no longer be raised over a gear card in the first place. */
+    this.hideInfoCard();
     if (this.cardTimer) window.clearTimeout(this.cardTimer);
     this.cardHero = hero;
     // Only offer the stepper when there is somewhere to step to.

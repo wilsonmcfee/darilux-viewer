@@ -1,0 +1,267 @@
+/* ============================================================================
+   lab.css — chrome for reveal-lab. Internal tool, so this is worth ten minutes.
+   ----------------------------------------------------------------------------
+   Borrows the viewer-shell dark variable group from style.css rather than
+   importing it: the lab is not the editorial page and pulling in style.css
+   would drag the whole paper layout along with it.
+   ========================================================================== */
+
+:root {
+  --shell: #14100c;
+  --shell-2: #241d16;
+  --shell-ink: #f2ede5;
+  --shell-ink-muted: rgba(242, 237, 229, 0.62);
+  --shell-line: rgba(242, 237, 229, 0.16);
+  --accent: #b8392e;
+  --paper: #efeae2;
+  --serif: 'Fraunces', Georgia, serif;
+  --sans: 'Inter', -apple-system, system-ui, sans-serif;
+  --panel-w: 336px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--shell);
+  color: var(--shell-ink);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#lab {
+  display: grid;
+  grid-template-columns: 1fr var(--panel-w);
+  grid-template-rows: 1fr 52px;
+  height: 100%;
+}
+
+/* ---- Stage ---------------------------------------------------------------- */
+#lab-stage {
+  position: relative;
+  grid-row: 1;
+  grid-column: 1;
+  overflow: hidden;
+  background: var(--shell);
+}
+#viewer { display: block; width: 100%; height: 100%; }
+
+#lab-hud {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  display: flex;
+  gap: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--shell-line);
+  border-radius: 4px;
+  background: rgba(20, 16, 12, 0.66);
+  backdrop-filter: blur(8px);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--shell-ink-muted);
+  pointer-events: none;
+}
+#lab-hud span:first-child { color: var(--shell-ink); }
+
+#lab-warn {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  padding: 9px 12px;
+  border-left: 2px solid var(--accent);
+  border-radius: 3px;
+  background: rgba(184, 57, 46, 0.16);
+  font-size: 12px;
+  color: var(--shell-ink);
+}
+#lab-warn[hidden] { display: none; }
+
+/* ---- Panel --------------------------------------------------------------- */
+#lab-panel {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px 20px;
+  border-left: 1px solid var(--shell-line);
+  background: #100d09;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#lab-panel header h1 {
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+#lab-panel header p {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--shell-ink-muted);
+}
+
+#lab-scenes { display: flex; flex-wrap: wrap; gap: 6px; }
+#lab-scenes button {
+  flex: 1 1 auto;
+  padding: 6px 9px;
+  border: 1px solid var(--shell-line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--shell-ink-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+#lab-scenes button:hover { border-color: rgba(242, 237, 229, 0.4); color: var(--shell-ink); }
+#lab-scenes button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: rgba(184, 57, 46, 0.18);
+  color: var(--shell-ink);
+}
+
+#lab-curve {
+  width: 100%;
+  height: 120px;
+  border: 1px solid var(--shell-line);
+  border-radius: 3px;
+  background: #0b0906;
+}
+
+/* ---- Controls ------------------------------------------------------------ */
+#lab-controls { display: flex; flex-direction: column; gap: 2px; }
+
+.lab-group {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--shell-line);
+  font-family: var(--serif);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--shell-ink-muted);
+}
+.lab-group:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+
+.lab-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 4px 0;
+}
+.lab-row > label { font-size: 12px; color: var(--shell-ink); }
+.lab-row > .lab-val {
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--shell-ink-muted);
+}
+.lab-row > input[type='range'],
+.lab-row > select,
+.lab-row > input[type='color'] { grid-column: 1 / span 2; }
+
+.lab-row .lab-note {
+  grid-column: 1 / span 2;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: rgba(242, 237, 229, 0.42);
+}
+.lab-row .lab-note.warn { color: rgba(224, 128, 116, 0.92); }
+
+input[type='range'] {
+  width: 100%;
+  height: 18px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--shell-line);
+}
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--shell-ink);
+}
+input[type='range']:focus-visible::-webkit-slider-thumb { background: var(--accent); }
+
+select {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--shell-line);
+  border-radius: 3px;
+  background: var(--shell-2);
+  color: var(--shell-ink);
+  font: inherit;
+  font-size: 12px;
+}
+input[type='color'] {
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--shell-line);
+  border-radius: 3px;
+  background: transparent;
+}
+.lab-row input[type='checkbox'] { justify-self: end; width: 15px; height: 15px; accent-color: var(--accent); }
+
+#lab-panel footer { display: flex; gap: 8px; margin-top: auto; padding-top: 12px; }
+#lab-panel footer button {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--paper);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+#lab-panel footer button.ghost {
+  border-color: var(--shell-line);
+  background: transparent;
+  color: var(--shell-ink-muted);
+}
+
+/* ---- Transport ----------------------------------------------------------- */
+#lab-transport {
+  grid-row: 2;
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-top: 1px solid var(--shell-line);
+  background: #100d09;
+}
+#lab-transport button {
+  padding: 6px 12px;
+  border: 1px solid var(--shell-line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--shell-ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+#lab-transport button:hover { border-color: var(--accent); }
+#lab-transport input[type='range'] { flex: 1; }
+#lab-transport output {
+  min-width: 74px;
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--shell-ink-muted);
+}

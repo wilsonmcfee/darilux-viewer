@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#14100c" />
+    <title>Bluedio — Darilux Studio</title>
+    <meta
+      name="description"
+      content="Walk through Bluedio, a dense live room captured in 3D Gaussian splats — drum kit, synth wall, DJ booth. Explore it in your browser, no app required."
+    />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Bluedio — Darilux Studio" />
+    <meta
+      property="og:description"
+      content="Walk through a dense live room captured in 3D Gaussian splats. In your browser, no app required."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <!-- ========================================================================
+       BLUEDIO, DOCKED — the phone layout where the scene is a WINDOW rather
+       than the whole screen, and the controls live underneath it.
+
+       WHY THIS PAGE EXISTS, SEPARATELY FROM bluedio.html
+
+       Two reasons, and the performance one is the bigger of the two.
+
+       1. PIXELS. A 4:3 window at phone width is about 35% of the area of a
+          full-bleed portrait screen, so the same frame cost buys roughly 1.7x
+          the LINEAR resolution. The full-bleed page had to render at an
+          effective ratio of ~1.0 to keep up, which is the setting that lost the
+          photoreal look; this layout renders the same scene at ~2.1 and costs
+          about 1.5x the fill. Sharpness per unit of frame time is the whole
+          argument, and it is an argument about area, not about taste.
+
+       2. FIELD OF VIEW. The poses are authored at 68.6 degrees horizontal.
+          Full-bleed portrait cannot show that without a 112-degree vertical
+          fisheye, so camera.ts caps the compensation at 80 and the visitor sees
+          only 42.4 degrees horizontal — 62% of the authored framing. A 4:3
+          window sits inside the cap entirely (v 54 / h 68.6), so this layout
+          simply shows what was authored. That is not a tuning improvement, it
+          is a whole class of problem that stops existing.
+
+       It is a separate page rather than a rewrite of bluedio.html because the
+       full-bleed version still works and is still the more immersive one on a
+       fast phone. Keeping both means the choice can be made with a link rather
+       than with a revert.
+       ====================================================================== -->
+  <body class="phone">
+    <div id="stage-dock" hidden></div>
+
+    <div class="phone-shell">
+      <!-- The scene. `ratio-4x3` rather than one of the reel page's ratio-*
+           classes: those are re-shaped to 9:16 by the portrait media query, and
+           this window must NOT be, since staying inside the fov cap is the
+           point of it. -->
+      <div class="viewer-window ratio-4x3" data-demo="bluedio">
+        <div class="poster">
+          <div class="room"></div>
+          <div class="inner">
+            <div class="kicker">Darilux Studio · 3D Gaussian splat capture</div>
+            <div class="roomname">Bluedio</div>
+            <button class="enter" type="button"><span class="tri"></span> Step into the room</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- The disclaimer trigger. NOT optional chrome: ui.ts resolves
+           #disclaimer-open eagerly in its constructor and throws on a miss, so
+           a page without it does not merely lose a link, it fails to boot.
+           Outside the window rather than inside the poster, because the poster
+           is now only 281px tall and this is the one piece of page furniture
+           that should survive stepping into the room. -->
+      <div class="phone-foot">
+        <button id="disclaimer-open" type="button">About this demo</button>
+      </div>
+
+      <!-- The dock. Empty in the markup on purpose: main.ts moves the thumb
+           sticks, the controls row and the hero card in here after
+           mountChrome(), so this page cannot drift out of step with the shared
+           stage chrome the way a hand-rolled copy would. -->
+      <div id="phone-dock">
+        <p class="phone-hint">
+          A dense live room — drum kit, synth wall, DJ booth.
+          Step in, then walk with the left stick and look with the right.
+        </p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

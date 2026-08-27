@@ -345,7 +345,37 @@ Per hero, all under `autoOrbit`:
 | `speed` / `ease` | `7.5` / `6` | sway degrees-per-second, and easing near the ends |
 | `yawLimit` | `60` | symmetric shorthand for `arc`; ignored when `arc` is set |
 
-Per demo: `cardStyle`, `refAspect`, `initialPose`, `src`, `walk`, `guide`.
+Per demo: `cardStyle`, `refAspect`, `initialPose`, `src`, `srcMobile`, `walk`,
+`guide`, `guideTouch`.
+
+### URL flags
+
+Everything below is a diagnostic or an A/B handle; none changes what a visitor
+sees by default. Most have a console twin, but the URL form is the one that
+survives being typed on a phone — which is the only place several of them are
+interesting. Detail in "Performance" below.
+
+| Flag | Does |
+|---|---|
+| `?stats` | frame time / resolution / splat count / sort time readout. `__stats(1)` |
+| `?gl` | force the WebGL2 fallback, to reproduce an older phone at a desk |
+| `?res=N` | override the render pixel ratio outright. `?res=1` = the 2026-08-23 build |
+| `?perf=N` | override just the mobile scale. `?perf=0.5` = SuperSplat's default, `?perf=1` = SuperSplat with performance mode off |
+| `?lite=1` | load the reduced 1.2M bundle (`srcMobile`) — the pre-2026-08-25 mobile default |
+| `?full=1` | force the full 2.53M asset (now also the default on every device) |
+| `?ondemand=0` / `=1` | force on-demand rendering off / on. Default: on for touch |
+| `?win=N` | docked page only — the viewer window's aspect ratio. `__win(n)` |
+| `?author` | authoring mode; also forces the full asset and disables walk mode |
+| `?sharpen=N` | CAS sharpening A/B. `__sharpen(n)` |
+| `?fov=N` | portrait fov ceiling. `__maxFov(n)` |
+| `?look=N` | look-stick degrees per second. `__lookRate(n)` |
+| `?lift=N` | hero framing lift, as a fraction of frame height. `__heroLift(n)` |
+| `?touch=0` / `?touch=1` | force the thumb pads off or on. `__sticks(0/1)` |
+
+Console-only: `__splat()` for the eight splat cost/quality knobs (including
+`__splat('lastpass')`, the preset judged too aggressive on 2026-08-24), plus the
+existing `__walk(0/1)`, `__eyeHeight(m)`, `__walkDebug()`, `__logPose()` and
+`__logAnchor()`.
 
 ### The stage controls
 
@@ -357,6 +387,106 @@ a `title`, a list of `{ key, action }` rows, and an optional `note`. Omit
 `guide` and the i hides itself. It duplicates the copy under the viewer on
 purpose — the page is frozen while a scene is open, so that copy is unreachable
 exactly when someone wants it. Keep the two in step.
+
+**Write `guideTouch` as well.** It is the same shape, shown instead of `guide` on
+a phone, and it is not optional in practice: `guide` names keys — W A S D, Shift,
+Esc — that a touch screen does not have, and on a phone this card is the *only*
+navigation help that can be reached at all. A demo with `walk` gets thumb sticks
+on touch, so the touch copy should name the **left stick** (walk) and the **right
+stick** (look) rather than the keyboard. Omit it and touch visitors fall back to
+`guide`, which is better than nothing and worse than a sentence of work.
+
+### Touch controls
+
+Nothing to configure. On a touch-shaped viewport (`pointer: coarse`, or a
+viewport at or under the 820px mobile breakpoint) a demo that declares `walk`
+gets two thumb sticks — left walks, right looks — shown only while free-roaming
+and hidden for the duration of a hero close-up. A demo with no `walk` block gets
+none, because sticks that cannot move anything are a lie.
+
+They are analog: a half-pushed stick walks at half speed. Both feed the same code
+paths as the keyboard and the mouse, so the walk region, the eye-plane pin and
+the hero yaw arcs all apply without the touch path knowing they exist.
+
+The pads sit **above** the bottom-left controls row, not beside it, because the i
+and the points toggle stay where they are and a left thumb lands on that corner.
+Inset is 35px on the mobile breakpoint and 22px above it — on a tablet the hands
+are further apart, so there the pads want to stay nearer the corners.
+
+Two things a touch device also changes, both easy to miss:
+
+- **Tooltips are suppressed** under `(hover: none)`. A touch screen fires
+  `:hover` on *tap* and then leaves it stuck, so the `data-tip` chip appeared
+  over the very card the tap had just opened. Removed with `content: none`; the
+  `aria-label` still carries the words. Desktop tooltips are untouched.
+- **Hero close-ups lift their subject** — see "Hero framing on a phone" below.
+
+### Hero framing on a phone
+
+The mobile hero card is a centred object in the bottom third, and on a hero with
+a real paragraph of copy it grows tall enough to cover frame centre — which is
+exactly where a fly-in parks its subject. So on the mobile card layout the camera
+**aims slightly below the pivot**, putting the subject `heroLift` of the frame
+height above centre. Default **0.27**; measured, the subject moves from 50% to
+23% of the frame, and the tallest of Bluedio's ten cards (269px, top edge at
+59.7%) still leaves ~37% of the frame clear.
+
+Two things about how it is implemented, because both matter if you touch it:
+
+- It is a **look-at offset**, not a change to the pose. The camera still lands on
+  the authored `position` byte-for-byte, the orbit pivot stays *on* the object so
+  auto-orbit still circles the gear rather than a point beneath it, and
+  `__logPose()` still reports the authored framing. Authoring is unaffected.
+- The maths is exact: `shift = 2 · f · distance · tan(vFov/2)` puts the pivot `f`
+  of the **frame height** above centre. It eases over 0.35s in both directions;
+  applied instantly it jolts at the start of every fly-in.
+
+Desktop gets `0` — its card is a wide shallow bar that clears the subject, and
+lifting there would recompose every hero pose you authored.
+
+Note the lift is a fixed fraction, so it is tuned for the tall cards and slightly
+over-lifts the short ones. If that reads wrong, the other lever is trimming the
+card's `max-height` and using a smaller lift.
+
+### The tuning knobs
+
+Every "feel" number in the mobile pass was judged by holding a phone, so every
+one of them is reachable **from** a phone as a URL param — a console is not.
+Params survive a reload; the console twins do not.
+
+| Param | Console | Default | What it is |
+|---|---|---|---|
+| `?fov=N` | `__maxFov(n)` | `80` | portrait vertical-fov ceiling (below) |
+| `?look=N` | `__lookRate(n)` | `75` | look-stick degrees/second at full push |
+| `?lift=N` | `__heroLift(n)` | `0.27` | hero subject lift, fraction of frame height |
+| `?touch=0\|1` | `__sticks(0\|1)` | auto | force the pads on or off |
+
+They compose: `?look=60&lift=0.2`. `?lift=0` is meaningful — it turns the lift
+off for a clean A/B. Called with no argument, `__maxFov()` reports the fov
+actually being rendered, which is the fastest way to tell an authored fov from a
+compensated one.
+
+`?fov=115` and `?look=105` restore the pre-tuning values if you ever want to see
+what was being complained about.
+
+### Portrait, and the field-of-view ceiling
+
+On a portrait phone the frames go **vertical** — `.ratio-*` becomes 9:16 under
+`(max-width: 820px) and (max-aspect-ratio: 1/1)` — which roughly doubles the
+usable frame on a 375px-wide screen. Landscape phones keep 4:3. Both carry a
+`max-height` so the frame cannot grow taller than the screen it is shown on, and
+both need `width: 100%` beside it: without a definite width, Chrome satisfies the
+cap by shrinking the *width* to preserve the ratio, and the frame pulls away from
+the column it should fill.
+
+`camera.ts` compensates fov on any viewport narrower than `refAspect`, to keep the
+authored horizontal coverage. That is right for 16:9 → 4:3 and **wrong for
+portrait**: holding a 68.6° horizontal field at aspect 0.46 costs a 112° vertical
+fov, which is a fisheye. `maxEffectiveFov` caps it at **80°**, so portrait gives up
+horizontal coverage instead — the right thing to give up when a look stick turns
+your head in a fraction of a second. It never binds on a landscape viewport, so
+desktop framing is untouched. Retune with `__maxFov(n)`; `__maxFov(115)` restores
+the pre-cap behaviour.
 
 The **switch** beside it shows and hides the hero-point markers, so a visitor can
 look at the room without dots over it. It reads "Point visibility" on hover,
@@ -384,6 +514,340 @@ overrides — boxes in WORLD units carrying a METRES falloff, tightest wins.
 
 Global, in `main.ts`: `HERO_PIVOT_PUSH` (0.18) — how far past the surface anchor
 the orbit pivot sits, as a fraction of the camera-to-anchor distance.
+
+## Performance — where the frame time goes
+
+**Profiled 2026-08-23.** This section used to open "nobody has profiled this
+viewer yet". That is no longer true, and everything below is measurement rather
+than arithmetic. The instrument is in the page: **`?stats`**.
+
+### Read the instrument first
+
+`?stats` (or `__stats(1)`) puts a readout in the top-left corner:
+
+```
+webgl2  60 fps  worst 17ms
+375x812  0.30 Mpx  dpr 1.00
+1.20M splats  sort 8ms x16
+```
+
+Every line answers a question you would otherwise guess at.
+
+- **renderer** — `webgpu` or `webgl2`. Establish this before anything else. The
+  two are not variations of each other: WebGPU sorts on the GPU, WebGL2 ships
+  the centres to a worker and counting-sorts the whole cloud on the CPU. Two of
+  the engine's culling knobs (`minContribution`, `foveationStrength`) are
+  WGSL-only and do **nothing at all** on WebGL2 — so on exactly the devices that
+  struggle, the most powerful-sounding settings are inert. Older phones and any
+  in-app browser wrapping WKWebView land here.
+- **worst** — the slowest frame in the window. Judge stutter on this, never on
+  the fps mean. A 60 fps mean with one 45 ms frame per second reads as "laggy"
+  to a person and as "fine" to an average.
+- **Mpx / dpr** — the backing-store size, which is the fill workload. Not the
+  CSS size.
+- **sort** — depth-sort milliseconds, from the engine's own `gsplat:sorted`
+  event. This line separates the two mobile failure modes, which look identical
+  from outside and have **opposite** fixes:
+  - *sort small, fps bad* → fill-bound. Cut resolution and overdraw.
+  - *sort longer than a frame* → the order arrives stale, so the image **swims**
+    while you move rather than merely running slow. Only cutting splat COUNT
+    helps; the sort is linear in it and no pixel knob touches it.
+
+Two companion flags make the phone reproducible at a desk:
+
+- **`?gl`** forces the WebGL2 fallback on a machine that has WebGPU. Without it
+  a laptop only ever exercises the path that was not the problem.
+- **`?res=N`** overrides the render pixel ratio. `?res=2` reproduces exactly
+  what shipped before the mobile pass.
+
+And **`?full=1`** loads the desktop asset on a phone, which is the honest A/B
+for judging what the reduced bundle costs.
+
+### What was actually wrong, in order of size
+
+> **REVISED 2026-08-25.** Two of the four findings below were overcorrected and
+> one was simply wrong about SuperSplat's arithmetic. The picture that shipped
+> came back judged "resolution dropped much too drastically, lost the photoreal
+> characteristics, culling much too aggressive" — and that was a fair reading.
+> Read "The overcorrection, and what SuperSplat actually does" immediately
+> below before acting on any number in this subsection.
+
+Measured on the WebGL2 path at a 375x812 portrait frame.
+
+**1. Render resolution — the single biggest lever, and the whole SuperSplat gap.**
+`maxPixelRatio` was capped at 2 for every device, which is far too sharp for a
+phone. Cutting it was right. Cutting it to a flat **1.0** was not — see below.
+
+**2. Splat count — the only thing that touches the sort.** See
+`autoscene/RUNNING.md` → "mobile_asset.py". The 1.2M bundle still exists and is
+still the right lever *if the sort is the problem*, but it is **no longer the
+default** — phones load the full 2.53M scene, and `?lite=1` selects the reduced
+one. See below for why.
+
+**3. `radialSorting` — a threshold, not a preference.** The engine re-sorts when
+the camera changes by more than `1e-3`, but *which quantity* that tests depends
+on this flag. Directional (the default) tests the forward vector, so
+`acos(dot) > 1e-3 rad` = **0.057 degrees** of rotation, and position is ignored
+entirely. The look stick turns at 75 deg/s — 1.25 deg per frame, twenty-two
+times over threshold — so simply looking around requested a re-sort every frame.
+Measured A/B while swinging the look:
+
+| | sort activity | worst frame |
+|---|---|---|
+| directional (engine default) | `14ms x2` | 33 ms |
+| radial | none | **18 ms** |
+
+It is a genuine trade — radial re-sorts on translation instead, and walk mode
+translates — so it is in the mobile preset and A/B-able with
+`__splat({radialSorting: false})`.
+
+**4. `alpha: false` and `stencil: false` on the device.** Both defaulted to
+true and neither is used. An alpha-backed canvas is composited SRC_OVER against
+the page every frame and can never be promoted to an opaque layer; the stencil
+allocated a packed depth-stencil attachment across the whole surface for a
+renderer that never reads one. **This one stands unchanged.**
+
+### The overcorrection, and what SuperSplat actually does
+
+*Added 2026-08-25, after reading `playcanvas/supersplat-viewer` rather than
+inferring it from behaviour. This supersedes the resolution and culling
+conclusions above.*
+
+**The formula.** SuperSplat does not "halve the canvas". It caps the SHORT AXIS
+OF THE SCREEN at a physical pixel count and *then* halves:
+
+```js
+const maxPixelDim = platform.mobile ? 1080 : 2160;
+const pixelRatio  = Math.min(maxPixelDim / Math.min(screen.width, screen.height),
+                             window.devicePixelRatio);
+const scale       = pixelRatio * (performanceMode ? 0.5 : 1.0);  // mobile default: on
+```
+
+The 0.5 is applied to a ratio that is already near the device DPR, not to 1.0.
+Worked through, and note that the answer **depends on the device**:
+
+| phone | SuperSplat (perf on) | SuperSplat (perf off) | old build | new full-bleed | new docked |
+|---|---|---|---|---|---|
+| 390x844, DPR 3 | 1.385 | 2.769 | 1.000 | 1.385 | 2.077 |
+| 375x812, DPR 2 | 1.000 | 2.000 | 1.000 | 1.000 | 1.500 |
+
+**So the old flat 1.0 matched SuperSplat exactly on a DPR-2 phone and was half
+its linear resolution — a quarter of its pixels — on a DPR-3 phone.** Do not
+repeat the claim that resolution was the whole gap: on an older DPR-2 device it
+was not the gap at all, and the softness there came entirely from the culling.
+
+**The culling is where this viewer was genuinely the aggressive one.** Every
+shared knob, engine stock vs SuperSplat vs what shipped:
+
+| knob | engine stock | SuperSplat | old preset | now |
+|---|---|---|---|---|
+| `alphaClip` | 0.3 | **1/255** — keeps *more* | untouched (0.3) | **1/255** |
+| `alphaClipForward` | 1/255 | untouched | **0.03**, 7.6x harsher | 1/255 |
+| `minContribution` | 3 | **1** — keeps *more* | 6 | 3 |
+| `minPixelSize` | 2 | untouched | 3 | 2 |
+| `colorUpdateAngle` | 10 | 0.2 (1 in perf mode) | 30 | 30 |
+| `radialSorting` | false | true | true | true |
+| splat count | — | full 2.53M | 1.2M | full 2.53M |
+
+SuperSplat moves three knobs and **every one keeps more splats than the engine
+would by default.** The old preset moved five and every one kept fewer, on top
+of half the gaussians and (on a DPR-3 phone) a quarter of the pixels. Five
+simultaneous cuts, never A/B'd against each other, against a benchmark that
+makes none of them. That is the whole of the "too aggressive" report.
+
+`alphaClipForward: 0.03` is the one to understand, because it is not merely a
+cull: the vertex shader sizes each quad by
+`clip = min(1, sqrt(log(alpha / alphaClipForward)) * 0.5)`, so raising the floor
+**shrinks every gaussian** and deletes the faint tail outright. That faint tail
+is most of what makes a splat scene read as a photograph rather than as
+geometry. It is the single likeliest cause of "lost the photoreal look".
+
+**The method lesson, which is the durable part.** The previous pass A/B'd each
+knob against *itself* and found each one defensible. Nothing A/B'd the STACK,
+and nothing established a ceiling by asking what the reference implementation
+actually does. One afternoon reading SuperSplat's source would have prevented
+five compounding cuts. Read the reference before tuning against it.
+
+### The splat knobs, and which ones your device honours
+
+The engine ships **eight** cost/quality parameters on `app.scene.gsplat` — the
+"six" this section used to claim missed `alphaClip` and `antiAlias`, and missing
+`alphaClip` mattered, because it is the one SuperSplat actually reaches for.
+Every one ran at its stock default for the life of this project, because
+`main.ts` added the gsplat component with no options and never touched the scene
+params. They now live in `src/splatquality.ts`, are applied **once** at scene
+load on touch devices, and are tunable live:
+
+```
+__splat()                            report current values + which are live here
+__splat({ alphaClipForward: 0.06 })  set one or more
+__splat('mobile')                    the current preset
+__splat('off')                       engine stock
+__splat('lastpass')                  the OLD preset, judged too aggressive
+```
+
+`__splat('lastpass')` against `__splat('mobile')` while walking is the honest
+A/B: it is exactly the change made on 2026-08-25, one call each way.
+
+| knob | stock | SuperSplat | mobile | works on |
+|---|---|---|---|---|
+| `alphaClip` | 0.3 | 1/255 | **1/255** | both |
+| `alphaClipForward` | 1/255 | untouched | 1/255 | both |
+| `minPixelSize` | 2 | untouched | 2 | both |
+| `colorUpdateAngle` | 10 | 0.2 | **30** | both |
+| `radialSorting` | false | true | **true** | both |
+| `antiAlias` | false | configurable | false | both |
+| `minContribution` | 3 | 1 | 3 | **WebGPU only** |
+| `foveationStrength` | 0 | unused | 0 | **WebGPU only** |
+
+The mobile preset now deviates from engine stock in exactly **three** places,
+and only one of them costs quality:
+
+- `alphaClip` 1/255 — a quality *increase* over stock, matching SuperSplat.
+- `radialSorting` true — a re-sort threshold change, not a quality trade.
+- `colorUpdateAngle` 30 — **the one deliberate deviation from SuperSplat**, and
+  it is deliberate because SuperSplat is an ORBIT viewer and this is a WALK
+  viewer. The re-bake trigger is camera *translation*, which orbiting barely
+  does and walking does constantly. Challenge this first if anything looks flat
+  in motion.
+
+`antiAlias` is off rather than on because the engine's own caveat is that it is
+meant for splats *trained* with anti-aliasing, and "if the source splats were
+generated without anti-aliasing, enabling this option may slightly soften the
+image or alter opacity". Nobody has established which LichtFeld Studio did for
+Bluedio. It is a genuine candidate for shimmer on small distant splats at
+reduced resolution — A/B it with `__splat({antiAlias: true})` and judge the
+drapes and the far wall. Note it forces a **shader recompile**, so expect a
+hitch on the call that changes it.
+
+`alphaClipForward` is the one worth understanding, because it is not merely a
+cull. The vertex shader sizes each gaussian's quad by
+`clip = min(1, sqrt(log(alpha / alphaClipForward)) * 0.5)`, so raising the floor
+**shrinks every quad** and deletes outright anything fainter than the floor. At
+0.03 an opaque splat keeps ~85% of its linear extent; a 10%-alpha splat keeps
+~55%. It bites hardest exactly where the cost is concentrated — an offline pass
+over this scene measured ~4% of the gaussians, the big faint haze, carrying
+roughly a third of all projected screen area.
+
+`colorUpdateAngle` matters specifically because this is a *walk* viewer. The
+bundle carries view-dependent colour, which the unified renderer bakes into the
+work buffer and re-bakes after `tan(colorUpdateAngle)` world units of
+translation — at the default 10 degrees, every **5.9 cm**. Walking at 1.25 m/s
+re-baked all 2.5M splats about twenty times a second. 30 degrees gives 19 cm.
+
+`foveationStrength` is first-party foveated rendering, shipped in 2.20.0 and
+used by nobody — neither this viewer nor SuperSplat's. It raises the cull
+threshold radially from screen centre, leaving the middle sharp. On a portrait
+phone with a centred subject it is close to free. WebGPU only.
+
+### Dead ends — measured, so nobody re-runs them
+
+- **Upgrading the engine.** 2.21.0 to 2.21.4 changes 16 files, none of them
+  gsplat; the newest gsplat commit reachable from the 2.21.4 tag predates
+  2.21.0. All the gsplat work landed in 2.20.0. SuperSplat pins 2.21.3.
+- **`unified: true`.** Already the engine default in 2.21 — a no-op.
+- **`splatBudget` / LOD.** A hard no-op on a flat SOGS bundle: the budget only
+  trims octree resources and counts everything else as immovable. Needs a
+  streamed SOG, which `splat-transform` will not synthesise from one input.
+- ~~**Copying SuperSplat's `scene.gsplat` settings.**~~ **REVERSED 2026-08-25.**
+  The observation was right — it sets `minContribution`, `alphaClip` and
+  `colorUpdateAngle` *lower* than engine defaults — and the conclusion drawn
+  from it was backwards. That those values are quality-UP is the *finding*, not
+  a reason to dismiss them: it is the evidence that SuperSplat's smoothness is
+  not bought with culling, which is what made five simultaneous cuts here look
+  reasonable when they were not. `alphaClip: 1/255` is now adopted verbatim.
+  `colorUpdateAngle` is the one value correctly left alone, and only because
+  this is a walk viewer and that one is triggered by translation.
+- **Hero markers and the walk SDF.** Both suspected in the previous version of
+  this section; both measured and refuted. 40 marker style writes cost ~4-8 us a
+  frame; Bluedio's 49+14-vertex region SDF costs 1.0 us while walking. Noise
+  next to a million-splat sort. (`left/top` instead of `transform` is 0.037
+  ms/frame — real, and still noise.)
+- **Culling splats invisible from the reachable camera set.** Sound in theory —
+  the walk polygon and hero poses are known ahead of time — but measured
+  negative, and deletion-based pruning blotches surfaces. See RUNNING.md.
+
+### On-demand rendering — landed 2026-08-25
+
+**This was the top item on "still on the table" for two passes, and it is the
+fix for "the frame rate drops after a few minutes."** That symptom is thermal:
+`autoRender` was true for the whole session, so a phone showing a *completely
+stationary picture* still rasterised the entire splat cloud sixty times a
+second, heated up, and throttled. No per-frame tuning can fix it, because the
+problem is the frames existing at all.
+
+Measured in-page, walking and then standing still on the docked page:
+
+| state | frames rendered |
+|---|---|
+| walking | every frame |
+| easing to a stop after releasing the stick | ~35 frames, then cold |
+| standing still, 60 frames | **0** |
+| reading a hero card, 180 frames (3 s) | **0** |
+| after a `gsplat:sorted` event | exactly 3 (the render hold) |
+
+**How the idle test avoids the trap this section used to warn about.** The
+previous note said `pinEyeTo()`'s `drift !== 0` fires on ~25% of idle frames
+from a 1-ulp float residue and would defeat a naive detector. It would. So the
+test is not a flag: `camera.ts` snapshots the five numbers that *every* motion
+source writes (`target`, `distance`, `yaw`, `pitch`, `fov`) and compares them
+with **epsilons sized to swallow the residue** — 1e-4 world units against a
+~5e-7 ulp, which is 0.03 mm at 3 units per metre. Being a snapshot rather than
+an enumeration, it also cannot be broken by adding a motion source later.
+
+Three things outside the camera call `controller.wake()`, and forgetting any of
+them shows a stale picture: a splat landing, a canvas resize, and **a depth sort
+completing on the worker** — that last one is asynchronous, so the frame drawn
+before it arrived is holding the previous splat ordering.
+
+It does not arm until ~90 frames after a scene lands. The bake, the first sort
+and the auto-framing all resolve over several frames after `load` fires, and
+sleeping through them is how this optimisation shows a black or half-sorted room.
+
+**The infinite `ping` marker animations turned out not to matter**, contrary to
+the old warning: they are CSS on DOM elements, so they never touch the engine's
+render decision. The thing that *did* have to change is **auto-orbit**, which is
+real camera motion and would have kept a hero close-up — the state a visitor
+sits in longest — awake permanently. It is dropped on touch devices; desktop
+keeps it. Without that, on-demand rendering buys nothing during the one state it
+most needs to.
+
+`?ondemand=0` turns it off for an A/B; `?ondemand=1` forces it on desktop.
+
+**`?stats` reads `idle · not drawing` when it is working.** The HUD samples on
+`frameend`, which stops firing entirely when the page sleeps, so it grew a
+`tick()` off `update` — otherwise it freezes mid-number and goes on displaying
+whatever fps the visitor last moved at, which is worse than a wrong number.
+
+### Still on the table
+
+- **`gsplatCentersEnabled = false` on WebGPU**, which skips a ~71 MB load-time
+  transient. Must stay true on WebGL2, where the CPU sorter needs the centres.
+- **Streamed SOG with real LOD levels**, which is the only route to
+  `splatBudget` and the mechanism SuperSplat actually uses. Worth more attention
+  than it has had: `supersplat-viewer` sets `splatBudget`, `lodUpdateAngle` and
+  `lodBehindPenalty`, so if superspl.at serves an octree-converted asset rather
+  than the flat `.sog` it was given, that is a *structural* advantage over this
+  viewer rather than a tuning one — and it would be the remaining unexplained
+  part of the comparison. Nobody has checked which it serves.
+
+### Already done, so do not rediscover these as wins
+
+- **On-demand rendering** — see the section immediately above.
+- `app.autoRender = false` whenever no viewer is live, and the stage is parked
+  in a hidden dock. A closed viewer costs nothing.
+- Exactly one splat in memory at a time; `unloadScene()` destroys the entity and
+  unloads the asset, including on the superseded-mid-load path.
+- The engine is not created at all until the first Enter click.
+- `antialias: false` — splats do their own edge softening.
+- No `CameraFrame` is constructed unless `?sharpen` is passed.
+
+### One measurement trap
+
+A browser pane that is not displayed reports `document.hidden`, so
+`requestAnimationFrame` never fires and the engine does not tick. Profile on a
+real device, or with the pane visible. See "Gotchas" #13.
+
 
 ## Gotchas that cost real time on Bluedio
 
@@ -417,6 +881,94 @@ the orbit pivot sits, as a fraction of the camera-to-anchor distance.
 9. **NumPy >= 2.0** if you use the offline `autoscene` pipeline — and note that
    its `scene.json` is in raw coordinates. See
    `autoscene/RUNNING.md`.
+10. **CSS specificity beats media queries.** A per-demo card rule such as
+    `#hero-card.bottom[data-demo="bluedio"]` (id + class + attribute) outranks the
+    mobile `#hero-card.bottom` (id + class) no matter which media query it sits
+    in, because a media query adds nothing to specificity. This shipped as a real
+    bug: the desktop `width: min(620px, 100% - 180px)` resolved to **195px** on a
+    375px stage and welded the card to the left edge of the frame. Per-demo card
+    rules now live inside `@media (min-width: 821px)` — **put new ones there.**
+11. **`aspect-ratio` + `max-height` needs `width: 100%`.** Without a definite
+    width, Chrome satisfies the cap by shrinking the *width* to preserve the
+    ratio (measured 430x323 instead of 623x323), and the frame pulls away from
+    the column it should fill. With it, the ratio yields instead — which is the
+    entire point of having a cap.
+12. **A vertical `aspect-ratio` must be guarded on orientation, not just width.**
+    An iPhone SE in *landscape* is 667px wide and matches `max-width: 820px`, so
+    an unguarded 9:16 there produces a frame **1108px tall inside a 375px
+    viewport**. Hence the `and (max-aspect-ratio: 1/1)` on the portrait query.
+13. **Testing in a browser whose pane is not displayed is testing nothing.** The
+    tab reports `document.hidden`, so `requestAnimationFrame` never fires: the
+    engine does not tick, `ResizeObserver` callbacks never arrive (they are
+    delivered at rAF time), and CSS transitions never advance. Every one of those
+    reads exactly like broken code. If you must drive it headless, pump frames by
+    hand — `AppBase.getApplication()` then `app.update(1/60)` in a loop — and
+    **call `app.render()` before any `worldToScreen()` measurement**: `update()`
+    does not fire `prerender`, and per the note in `main.ts` only `prerender`
+    rebuilds the camera's cached view matrix, so projections silently use a stale
+    camera. That one cost an hour and reported a subject at the top of the frame
+    that was really dead centre.
+
+14. **Re-parenting chrome breaks every rule that resolved against its old
+    ancestor — and the failures are invisible in review.** `bluedio-phone.html`
+    moves four elements out of `#stage` into a dock, and every defect below came
+    from that one operation. Read this list before moving any chrome again.
+
+    - **`position: static` is not "un-positioned", it removes a CONTAINING
+      BLOCK.** Cancelling an inherited `position: absolute` that way silently
+      re-pointed the thumb pads' knob, label and `::before` slop ring at the
+      dock. The slop ring has `inset: -20px` and inherits `pointer-events:
+      auto`, so it became a hit target larger than the whole dock and **the
+      controls stopped working entirely**. Use `position: relative` with
+      `top/right/bottom/left: auto` — the four `auto`s are what stop the
+      inherited offsets becoming relative displacements.
+    - **A translucent panel over a flat ground of the SAME colour is invisible.**
+      `--glass-strong` is `rgba(20,16,12,.85)` and `--shell` is `rgb(20,16,12)`.
+      Over a splat the alpha is the whole point; over the dock it composites to
+      the identical pixels — **contrast ratio 1.00**. Every docked panel needs
+      its fill restated, and `backdrop-filter` dropped, since blurring a flat
+      fill costs a backdrop re-sample per frame for nothing.
+    - **Check what was gating the element before you move it.** `#stage-controls`
+      was kept off the poster purely by `#stage` living inside
+      `<div id="stage-dock" hidden>`. It is the one piece of stage chrome with
+      no `hidden` class of its own, so docking it produced a points switch that
+      flipped its own `aria-checked` while `heroes` was still null.
+    - **An `opacity: 0` element is still fully hit-testable.** Cards fade for
+      300-400 ms before `.hidden` lands; docked, that invisible card lies across
+      the thumb pads. Pair every fade with `pointer-events: none` at rest.
+    - **Elements that were far apart can become mutually exclusive.** The help
+      card and the gear card sat at opposite corners full-bleed and were never
+      made exclusive; centred on the same dock point, the higher z-index one
+      buried the other's close button.
+    - **A width media query cannot tell a wide screen from a phone turned
+      sideways.** `(min-width: 560px)`, written for a laptop review, matches an
+      iPhone in landscape at 874px. Add `and (pointer: fine)`. This is gotcha 12
+      in a second costume — and the docked card's whole typography had the same
+      shape of bug, living in a `max-width: 820px` block it fell out of on
+      rotation.
+    - **A ResizeObserver is a proxy for the viewport, not the viewport.** A
+      fixed-width review shell means `#stage` is the same size at 900px and
+      700px, so crossing the touch breakpoint fired nothing. Listen to the
+      media queries that *are* the condition.
+
+15. **`:not()` carries its argument's specificity, so scoping by negation
+    escalates.** `body:not(.solo):not(.phone) #disclaimer-open` scores (0,1,2,1)
+    and silently outranked the `prefers-reduced-motion` override at (0,1,0,0) —
+    reduced motion stopped stopping an infinite animation. Negation also makes
+    the scoped treatment the DEFAULT that every future page must opt out of.
+    Scope positively (`body.reel`), and keep any override at matching
+    specificity so source order decides it. Companion to gotcha 10.
+
+16. **`var()` defeats the two-declaration CSS fallback idiom.** The usual
+    `prop: <old>; prop: <new>` pattern works because a browser discards the
+    second declaration at *parse* time. A value containing `var()` skips
+    parse-time validation entirely — it is substituted at computed-value time,
+    and if invalid then becomes IACVT, which resolves the property to its
+    **initial** value rather than to the earlier declaration. So a `vh` line
+    above an `svh` line containing `var(--x)` looks like a fallback and is a
+    no-op. Use `@supports` instead. Here it would have silently removed the cap
+    holding the dock open on any pre-15.4 WKWebView — the exact browser the
+    layout targets.
 
 ## A standalone page for one scan
 

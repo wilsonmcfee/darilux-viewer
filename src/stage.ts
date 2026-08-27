@@ -29,6 +29,12 @@ export const STAGE_HTML = `
   <!-- Hero-point markers are injected here and positioned each frame. -->
   <div id="hero-layer" aria-hidden="true"></div>
 
+  <!-- Mount point for the two thumb sticks. Empty in the markup on purpose:
+       joystick.ts builds the pads, and main.ts shows them only on a touch-shaped
+       viewport, only while a scene is live, and only outside a hero close-up.
+       aria-hidden because a keyboard visitor has WASD and never sees these. -->
+  <div id="touch-controls" class="hidden" aria-hidden="true"></div>
+
   <!-- Hero-point description card (HUD variants). -->
   <aside id="hero-card" class="hidden" role="dialog" aria-label="Gear details">
     <button id="hero-card-close" class="modal-close" type="button" aria-label="Close">×</button>

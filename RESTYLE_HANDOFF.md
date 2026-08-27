@@ -172,6 +172,17 @@ All three share `.hero-card-*` / `#hero-card-anchored` styling.
 
 ## Responsive
 
+> **Superseded 2026-08-22 by the mobile pass.** What is below described the state
+> before it and is kept only so a reader of the old text knows it moved. The
+> authority is now **`TEMPLATE.md` → "Portrait, and the field-of-view ceiling"**
+> and **"Touch controls"**. In short: there are now TWO mobile queries, not one —
+> `(max-width: 820px)` for layout, plus
+> `(max-width: 820px) and (max-aspect-ratio: 1/1)` which takes the frames
+> **vertical (9:16)** rather than deepening them to 4:3; the hero card is a
+> centred object in the bottom third rather than a full-width bottom sheet; and a
+> walkable demo gains two thumb sticks. Do not reason about mobile from the
+> paragraph below.
+
 One breakpoint: `@media (max-width: 820px)`. It stacks the two-column grids,
 deepens the 16:9 windows to 4:3, widens `ratio-tall` to full column, and turns
 the hero card into a bottom sheet inside the window.

@@ -40,6 +40,10 @@ const TRACKED_KEYS = new Set([...MOVE_KEYS, 'ShiftLeft', 'ShiftRight']);
 // fly-in and then do nothing.
 const WALK_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
 
+/** Shift on either side = hurry. There is no touch equivalent on purpose: an
+    analog stick already covers the whole speed range a body has. */
+const fastKeys = (k: Set<string>): boolean => k.has('ShiftLeft') || k.has('ShiftRight');
+
 // Walk-mode defaults; a demo's WalkConfig overrides any of them.
 const DEFAULT_WALK = {
   speed: 1.25,        // m/s — an unhurried indoor walk
@@ -54,8 +58,22 @@ const DEFAULT_WALK = {
 const WALK_PIN_TAU = 0.12;
 const WALK_PIN_EPS = 1e-3;
 
+// How fast the hero framing lift fades in and out, seconds. Slow enough to read
+// as the camera composing rather than twitching, fast enough to be finished well
+// inside the 1.6s fly-in that triggers it.
+const HERO_LIFT_TAU = 0.35;
+
 // Default auto-orbit feel (per-hero overrides can replace any of these).
 const DEFAULT_ORBIT = { speed: 7.5, ease: 6, amplitude: 30, yawLimit: 60 };
+
+/* Thresholds below which a change in the camera does not count as motion, used
+   only by the movedThisFrame signal that drives on-demand rendering. Sized to
+   clear float residue rather than to be perceptually just-noticeable — see the
+   long note on movedThisFrame for the ulp arithmetic. 1e-4 world units is
+   0.03 mm at Bluedio's 3 units per metre; 1e-3 degrees is far under a pixel of
+   yaw at any resolution this viewer will ever render. */
+const MOVE_EPS = 1e-4;
+const ANGLE_EPS = 1e-3;
 
 /**
  * A WalkConfig with defaults resolved. `look` stays nullable because free look
@@ -104,7 +122,30 @@ export class OrbitFlyCamera {
   // side coverage is harmless). s.fov itself is never mutated, so __logPose()
   // and authored poses stay in the reference space.
   private refAspect = 16 / 9;
-  private maxEffectiveFov = 115; // vertical degrees — distortion guard
+  /* Vertical-degree CEILING on that compensation, and the number that decides
+     whether a portrait phone reads as a room or as a fisheye.
+
+     Preserving horizontal coverage is right for a MILD aspect change: 16:9 ->
+     4:3 takes Bluedio's authored fov 42 to 54, which nobody notices. It is
+     pathological for PORTRAIT. Full-bleed on a 375x812 phone is aspect 0.46,
+     and holding the authored 68.6° horizontal there costs a VERTICAL fov of
+     112°: floor and ceiling swallow the frame, verticals bow, and the gear you
+     came to look at is a smudge in the middle. The old 115 ceiling never bound,
+     so 112° was the shipped mobile behaviour.
+
+     80° is the compromise, and being a ceiling it binds only once the viewport
+     is roughly square or taller — every landscape window is untouched:
+
+       16:9  (1.778)  ->  v 42, h 68.6    unchanged (at reference)
+       4:3   (1.333)  ->  v 54, h 68.6    unchanged (ceiling not reached)
+       9:16  (0.5625) ->  v 80, h 50.6    was v 101, h 68.6
+       375x812 (0.46) ->  v 80, h 42.4    was v 112, h 68.6
+
+     Horizontal coverage is what gets given up, and on a phone that is the right
+     thing to give up: the look stick turns your head in a fraction of a second,
+     whereas nothing recovers a frame that is already distorted. Retune live with
+     __maxFov(n); __maxFov(115) restores the old behaviour exactly. */
+  private maxEffectiveFov = 80;
 
   // Tuning.
   private rotSpeed = 0.28;   // deg per pixel
@@ -138,6 +179,21 @@ export class OrbitFlyCamera {
   private autoOrbitEase = 6;     // degrees near each end over which speed eases down
   private autoOrbitDelay = 1500; // ms of no input before auto-orbit (re)starts
   private lastInteract = 0;      // performance.now() of the last user input
+
+  /* ---- Hero framing lift -------------------------------------------------
+     Fraction of the FRAME HEIGHT by which a close-up's subject is raised above
+     centre, so a card sitting across the bottom of the frame cannot cover the
+     very object it describes. 0 disables it entirely, which is the desktop
+     setting — main.ts installs a value only for the mobile card layout.
+
+     `liftNow` is the eased 0..1 follower, not a duplicate of the setting: the
+     lift has to fade IN as a close-up is entered and OUT as it is left, or the
+     aim would snap the instant heroMode flipped and every fly-in would start
+     with a jolt. Eased in both directions by one exponential, which also means
+     interrupting a fly-in mid-fade cannot leave it stranded. */
+  private heroFrameLift = 0;
+  private liftNow = 0;
+  private aimTmp = new Vec3(); // scratch for the lifted look-at point
 
   /* ---- Walk mode ---------------------------------------------------------
      A fixed standing eye height, held as an INVARIANT rather than as a rule
@@ -174,6 +230,32 @@ export class OrbitFlyCamera {
   private pointers = new Map<number, { x: number; y: number }>();
   private lastPinchDist = 0;
 
+  /* ---- Analog touch sticks (joystick.ts) ---------------------------------
+     Both axes are held in SCREEN space — x right, y down — so they are the same
+     quantity a drag already produces, and the look stick can go through the very
+     same applyLook() a drag does. Anything the mouse path clamps (hero yaw arcs,
+     the walk region, the eye plane) is therefore inherited rather than reimplemented.
+
+     Magnitude is meaningful: unlike a key, a stick can be half-pressed, and a
+     half-pressed stick walks at half speed. Kept as plain objects rather than
+     Vec3 because they are written every pointermove and read every frame. */
+  private moveAxis = { x: 0, y: 0 }; // left stick — strafe / advance
+  private lookAxis = { x: 0, y: 0 }; // right stick — yaw / pitch
+  /* Degrees per second at FULL deflection.
+
+     Was 105, which read as "much too sensitive" on a real phone — a full sweep
+     of the room in barely three seconds, and impossible to stop on a hero dot.
+     75 is a 29% cut, the deep end of the 25-30% Will asked for. The estimate 105
+     came from was that a stick should match a drag's throughput; that was the
+     wrong target, because a drag ENDS when the finger lifts whereas a stick
+     keeps turning, so the same rate that feels brisk for 60px of drag feels
+     uncontrollable held for a second.
+
+     Tune from the phone with ?look=N, or __lookRate(n) in a console. The expo
+     curve in update() is a separate lever and shapes the small deflections; this
+     number only sets the top speed. */
+  private lookRate = 75;
+
   // WASD/Q-E free-fly (authoring aid): translates the orbit target through the
   // scene so you can fly up to a piece of gear before capturing its pose.
   private pressedKeys = new Set<string>();
@@ -203,6 +285,104 @@ export class OrbitFlyCamera {
   setReferenceAspect(aspect: number): void {
     this.refAspect = aspect > 0 ? aspect : 16 / 9;
     this.apply();
+  }
+
+  /**
+   * How far a hero close-up lifts its subject above centre, as a fraction of the
+   * frame height. 0 turns it off.
+   *
+   * WHY IT EXISTS: on a phone the hero card is centred across the bottom third,
+   * and a hero whose copy runs long grows the card to its 46% cap — which puts
+   * the card's top edge at ~47% of the frame, i.e. across dead centre, exactly
+   * where the fly-in parks the object. The card then hides the thing it is
+   * describing.
+   *
+   * Implemented as a look-at offset rather than by moving the pose, so authored
+   * hero poses stay the single source of truth for where the camera stands; see
+   * apply(). Clamped at 0.45 because beyond that the subject leaves the frame
+   * through the top. Tune from the phone with ?lift=N or __heroLift(n).
+   */
+  setHeroFrameLift(fraction: number): number {
+    const f = Number(fraction);
+    this.heroFrameLift = Number.isFinite(f) ? math.clamp(f, 0, 0.45) : 0;
+    // Turning it off should read as off immediately, not fade out over a third
+    // of a second — this is a tuning control, not part of the experience.
+    if (this.heroFrameLift === 0) this.liftNow = 0;
+    this.apply();
+    return this.heroFrameLift;
+  }
+
+  /** Look-stick top speed, degrees/second at full deflection. Returns it. */
+  setLookRate(degPerSec: number): number {
+    const v = Number(degPerSec);
+    if (Number.isFinite(v) && v > 0) this.lookRate = v;
+    return this.lookRate;
+  }
+
+  /** Retune the portrait fov ceiling live (see maxEffectiveFov). Returns it. */
+  setMaxFov(deg: number): number {
+    const v = Number(deg);
+    if (Number.isFinite(v) && v > 20) this.maxEffectiveFov = v;
+    this.apply();
+    return this.maxEffectiveFov;
+  }
+
+  /** The fov actually being rendered, and the authored one it came from. */
+  get fovDebug(): { authored: number; effective: number; aspect: number; ceiling: number } {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    return {
+      authored: Math.round(this.s.fov * 10) / 10,
+      effective: Math.round(this.effectiveFov(this.s.fov) * 10) / 10,
+      aspect: h ? Math.round((w / h) * 1000) / 1000 : 0,
+      ceiling: this.maxEffectiveFov,
+    };
+  }
+
+  /** True when this demo is height-locked AND walk mode is not suppressed. */
+  get walkActive(): boolean {
+    return this.walkEnabled;
+  }
+
+  /* ---- Analog touch sticks ----------------------------------------------
+     joystick.ts owns the widgets and the gesture; the camera owns what they
+     MEAN. Both take a screen-space vector already clamped to the unit disc.
+     --------------------------------------------------------------------- */
+
+  /**
+   * Left stick: translate. x right, y DOWN — so pushing the stick away from the
+   * visitor (negative y) walks forward, which is what handleWalk() negates.
+   *
+   * Deflecting from rest counts as taking control, exactly like the first WASD
+   * keypress: it cancels an in-progress fly-in so the visitor is never fighting
+   * an animation for the stick.
+   */
+  setMoveAxis(x: number, y: number): void {
+    const wasIdle = this.moveAxis.x === 0 && this.moveAxis.y === 0;
+    this.moveAxis.x = x;
+    this.moveAxis.y = y;
+    if (wasIdle && (x !== 0 || y !== 0)) this.interrupt();
+  }
+
+  /** Right stick: look. Integrated per frame in update(), not here. */
+  setLookAxis(x: number, y: number): void {
+    const wasIdle = this.lookAxis.x === 0 && this.lookAxis.y === 0;
+    this.lookAxis.x = x;
+    this.lookAxis.y = y;
+    if (wasIdle && (x !== 0 || y !== 0)) this.interrupt();
+  }
+
+  /**
+   * Drop both sticks to rest. Called whenever the pads are taken away rather
+   * than released — entering a hero close-up, leaving the scene — because a pad
+   * that is hidden mid-push would otherwise leave its last vector installed and
+   * the visitor would walk into a wall for the rest of the session.
+   */
+  releaseSticks(): void {
+    this.moveAxis.x = 0;
+    this.moveAxis.y = 0;
+    this.lookAxis.x = 0;
+    this.lookAxis.y = 0;
   }
 
   /** Re-apply the camera (call after the canvas resizes or is reparented, so
@@ -461,8 +641,83 @@ export class OrbitFlyCamera {
     return this.flying;
   }
 
+  /* ---- Motion signal, for on-demand rendering ----------------------------
+     `movedThisFrame` answers the ONE question a render-on-demand loop has, and
+     it is computed here rather than in main.ts because every source of camera
+     motion already funnels through `this.s`: fly-ins, walk input, mouselook,
+     the walk-plane settle, the eye pin and auto-orbit all write the same five
+     numbers. Comparing a snapshot of those numbers is therefore exhaustive by
+     construction — a motion source added later cannot forget to report itself,
+     which an enumerate-the-flags approach absolutely would.
+
+     THE EPSILONS ARE THE WHOLE POINT, and TEMPLATE.md -> "Still on the table"
+     names the trap they exist to dodge: pinEyeTo()'s `drift !== 0` branch fires
+     on roughly a quarter of genuinely idle frames from a 1-ulp float residue,
+     so an exact `!==` here would report motion forever and the page would never
+     idle. At this scene's coordinate magnitudes (~5 world units) one ulp is
+     ~5e-7, so 1e-4 clears the residue by ~200x while staying far below anything
+     an eye could see: 1e-4 world units is 0.03 mm at 3 units per metre.
+
+     `liftNow` is compared separately because the hero framing lift moves the
+     LOOK-AT point without touching `s` — it is the one motion the five-number
+     comparison cannot see. (The docked phone layout sets the lift to 0, so
+     there it is permanently cold; it still matters on the full-bleed page.)
+     -------------------------------------------------------------------- */
+  private moved = true; // start true so the very first frame always draws
+  private prevTarget = new Vec3();
+  private prevYaw = NaN;
+  private prevPitch = NaN;
+  private prevDistance = NaN;
+  private prevFov = NaN;
+  private prevLift = NaN;
+
+  /**
+   * Did the camera actually change this frame? Valid once `update()` has run.
+   * A render-on-demand loop draws when this is true and sleeps when it is not.
+   */
+  get movedThisFrame(): boolean {
+    return this.moved;
+  }
+
+  /**
+   * Force the next frame to count as moved.
+   *
+   * For everything OUTSIDE the camera that still needs a redraw: a splat
+   * landing, a depth sort completing on the worker, the canvas being resized.
+   * Without this an on-demand loop would show a stale picture after any of
+   * them, because none of the three touches the camera.
+   */
+  wake(): void {
+    this.moved = true;
+  }
+
   /** Called every frame from the render loop. */
   update(dt: number): void {
+    /* Snapshot the camera BEFORE anything below can write it — see the
+       movedThisFrame note above for why this is a snapshot rather than a set
+       of flags. */
+    this.prevTarget.copy(this.s.target);
+    this.prevYaw = this.s.yaw;
+    this.prevPitch = this.s.pitch;
+    this.prevDistance = this.s.distance;
+    this.prevFov = this.s.fov;
+    this.prevLift = this.liftNow;
+
+    /* Ease the hero framing lift toward wherever heroMode now is. Runs FIRST so
+       everything below writes the camera with this frame's value, and applies
+       once itself for the case where nothing else this frame would — a visitor
+       sitting still in a close-up before auto-orbit wakes up. */
+    if (this.heroFrameLift > 0) {
+      const want = this.heroMode ? 1 : 0;
+      if (Math.abs(want - this.liftNow) > 1e-4) {
+        this.liftNow += (want - this.liftNow) * (1 - Math.exp(-dt / HERO_LIFT_TAU));
+        this.apply();
+      } else if (this.liftNow !== want) {
+        this.liftNow = want; // settle exactly, so `lift > 1e-4` can go fully cold
+        this.apply();
+      }
+    }
+
     if (this.flying) {
       this.flyT += dt / this.flyDuration;
       const k = easeInOutCubic(Math.min(this.flyT, 1));
@@ -480,6 +735,26 @@ export class OrbitFlyCamera {
       }
       this.apply();
     }
+    /* Right stick: look. A held stick is a rate, so unlike a drag it has to be
+       integrated per frame rather than applied per event.
+
+       Guarded on !flying so a stick still held as a fly-in begins cannot fight
+       the animation. setLookAxis() already interrupts a fly-in on the first
+       deflection, so this only catches the reverse order.
+
+       EXPO: the deflection is shaped |v|-weighted before becoming a rate, which
+       buys fine control near centre without lowering the top speed. Linear at a
+       rate high enough to cross the room feels twitchy at the small deflections
+       used to settle onto a hero dot; the 0.35 floor keeps a gentle push from
+       feeling dead altogether. */
+    if (!this.flying && (this.lookAxis.x !== 0 || this.lookAxis.y !== 0)) {
+      const expo = (v: number): number => v * (0.35 + 0.65 * Math.abs(v));
+      const r = this.lookRate * dt;
+      // Signs match a DRAG exactly (see orbit()): stick right turns right, and
+      // stick away-from-you looks up.
+      this.applyLook(-expo(this.lookAxis.x) * r, expo(this.lookAxis.y) * r);
+    }
+
     // Free-fly / walk runs every frame (and interrupts any in-progress fly-in).
     this.handleMovement(dt);
 
@@ -547,6 +822,32 @@ export class OrbitFlyCamera {
       }
       this.apply();
     }
+
+    /* Did any of that actually move the camera? `moved` may already be true
+       from an out-of-band wake() this frame, so OR rather than assign — a
+       scene landing must not be cancelled by a still camera. */
+    this.moved =
+      this.moved ||
+      Math.abs(this.s.target.x - this.prevTarget.x) > MOVE_EPS ||
+      Math.abs(this.s.target.y - this.prevTarget.y) > MOVE_EPS ||
+      Math.abs(this.s.target.z - this.prevTarget.z) > MOVE_EPS ||
+      Math.abs(this.s.distance - this.prevDistance) > MOVE_EPS ||
+      Math.abs(this.s.yaw - this.prevYaw) > ANGLE_EPS ||
+      Math.abs(this.s.pitch - this.prevPitch) > ANGLE_EPS ||
+      Math.abs(this.s.fov - this.prevFov) > ANGLE_EPS ||
+      Math.abs(this.liftNow - this.prevLift) > 1e-5;
+  }
+
+  /**
+   * Clear the moved flag. Called by the render loop AFTER it has decided
+   * whether to draw, so the next frame starts from a clean slate.
+   *
+   * Separate from reading `movedThisFrame` because the flag is set from two
+   * places — this update() and any out-of-band wake() — and a getter with a
+   * side effect would make the order of those two reads matter.
+   */
+  clearMoved(): void {
+    this.moved = false;
   }
 
   /** Current framing as a Pose (no side effects). */
@@ -621,13 +922,43 @@ export class OrbitFlyCamera {
   /** Write orbit params → camera transform + fov. */
   private apply(): void {
     const { target, distance, yaw, pitch, fov } = this.s;
+    const sy = Math.sin(yaw * RAD);
+    const cy = Math.cos(yaw * RAD);
     const cp = Math.cos(pitch * RAD);
-    const x = target.x + distance * cp * Math.sin(yaw * RAD);
-    const y = target.y + distance * Math.sin(pitch * RAD);
-    const z = target.z + distance * cp * Math.cos(yaw * RAD);
-    this.cam.setPosition(x, y, z);
-    this.cam.lookAt(target);
-    if (this.cam.camera) this.cam.camera.fov = this.effectiveFov(fov);
+    const sp = Math.sin(pitch * RAD);
+    this.cam.setPosition(
+      target.x + distance * cp * sy,
+      target.y + distance * sp,
+      target.z + distance * cp * cy,
+    );
+    const vFov = this.effectiveFov(fov);
+    /* HERO FRAMING LIFT — aim BELOW the pivot so the subject rides high in the
+       frame, clear of the card. See setHeroFrameLift() for why, and note what
+       this deliberately does NOT touch: the eye position above is already
+       written, and `distance`/`yaw`/`pitch`/`target` are untouched. Only the
+       LOOK-AT POINT moves. So the authored camera position is preserved exactly,
+       the orbit pivot stays on the object (auto-orbit still circles the gear,
+       not a point under it), and getPose()/logPose() keep reporting the authored
+       framing rather than a lifted one.
+
+       Geometry: with the aim point `shift` below the pivot along the camera's
+       local up, the pivot lands at NDC y = (shift/distance) / tan(vFov/2). Set
+       that to 2f and the pivot sits exactly f of the FULL frame height above
+       centre — hence the 2. Local up is dirFrom(yaw, pitch + 90), which reduces
+       to (-sp·sy, cp, -sp·cy); aim = target − up·shift. */
+    const lift = this.heroFrameLift * this.liftNow;
+    if (lift > 1e-4) {
+      const shift = 2 * lift * distance * Math.tan((vFov * RAD) / 2);
+      this.aimTmp.set(
+        target.x + sp * sy * shift,
+        target.y - cp * shift,
+        target.z + sp * cy * shift,
+      );
+      this.cam.lookAt(this.aimTmp);
+    } else {
+      this.cam.lookAt(target);
+    }
+    if (this.cam.camera) this.cam.camera.fov = vFov;
   }
 
   /**
@@ -698,9 +1029,10 @@ export class OrbitFlyCamera {
       return;
     }
     const k = this.pressedKeys;
-    if (k.size === 0) return;
-    const strafe = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
-    const advance = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
+    const stick = this.moveAxis.x !== 0 || this.moveAxis.y !== 0;
+    if (k.size === 0 && !stick) return;
+    const strafe = this.axisOr(this.moveAxis.x, (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0));
+    const advance = this.axisOr(-this.moveAxis.y, (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0));
     const lift = (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0);
     if (strafe === 0 && advance === 0 && lift === 0) return;
 
@@ -713,8 +1045,7 @@ export class OrbitFlyCamera {
     const right = new Vec3(Math.cos(yaw), 0, -Math.sin(yaw));
     const worldUp = new Vec3(0, 1, 0);
 
-    const fast = k.has('ShiftLeft') || k.has('ShiftRight');
-    const speed = Math.max(this.moveReference, 0.5) * this.flySpeed * (fast ? 3 : 1) * dt;
+    const speed = Math.max(this.moveReference, 0.5) * this.flySpeed * (fastKeys(k) ? 3 : 1) * dt;
 
     const move = new Vec3();
     move.add(forward.mulScalar(advance));
@@ -722,10 +1053,31 @@ export class OrbitFlyCamera {
     move.add(worldUp.mulScalar(lift));
     if (move.lengthSq() > 0) {
       this.lastInteract = performance.now();
-      move.normalize().mulScalar(speed);
+      /* Normalize the DIRECTION, then scale by the intended magnitude — rather
+         than clamping the summed vector, which is what handleWalk() can safely
+         do. The difference is that this basis is not orthonormal: `worldUp` is
+         not perpendicular to a pitched `forward`, so |forward + worldUp| is
+         2 - 2·sin(pitch) under the root, i.e. 1.41 when level but only 0.77 at
+         45° down. Clamping would therefore have quietly slowed W+E to 77% while
+         pitched, changing a keyboard behaviour this pass has no business
+         touching. Scaling by min(1, hypot(axes)) leaves every key combination
+         bit-identical to the old normalize() and still honours a half-pushed
+         stick. */
+      const mag = Math.min(1, Math.hypot(strafe, advance, lift));
+      move.normalize().mulScalar(speed * mag);
       this.s.target.add(move);
       this.apply();
     }
+  }
+
+  /**
+   * Reconcile one analog axis with its keyboard equivalent: whichever is pushed
+   * FURTHER wins. Keys are all-or-nothing, a stick is fractional, and taking the
+   * larger magnitude means neither input can cancel or halve the other when both
+   * happen to be live — which on a touch laptop is a real case, not a hypothetical.
+   */
+  private axisOr(analog: number, keys: number): number {
+    return Math.abs(analog) > Math.abs(keys) ? analog : keys;
   }
 
   /**
@@ -742,14 +1094,20 @@ export class OrbitFlyCamera {
    *     out. Instant on/off is the biggest tell that you are driving a camera
    *     rather than walking, and the old free-fly speed worked out to ~2.7 m/s,
    *     which is a jog.
+   *
+   * The LEFT TOUCH STICK enters here too, and deliberately by the same door: it
+   * is just a fractional WASD. Everything downstream of `wish` — the accel ramp,
+   * the region constraint, the applied-velocity writeback — is shared, so a
+   * finger and a keyboard cannot end up with different physics.
    */
   private handleWalk(dt: number): void {
     const w = this.walk!;
     const k = this.pressedKeys;
-    if (k.size === 0 && this.walkVel.lengthSq() === 0) return;
+    const stick = this.moveAxis.x !== 0 || this.moveAxis.y !== 0;
+    if (k.size === 0 && !stick && this.walkVel.lengthSq() === 0) return;
 
-    const strafe = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
-    const advance = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
+    const strafe = this.axisOr(this.moveAxis.x, (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0));
+    const advance = this.axisOr(-this.moveAxis.y, (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0));
 
     // Desired velocity for this frame, world units/sec, on the horizontal plane.
     const wish = new Vec3();
@@ -760,8 +1118,14 @@ export class OrbitFlyCamera {
       // look cannot collapse them to a degenerate normalize().
       wish.add(new Vec3(-Math.sin(yaw), 0, -Math.cos(yaw)).mulScalar(advance));
       wish.add(new Vec3(Math.cos(yaw), 0, -Math.sin(yaw)).mulScalar(strafe));
-      const fast = k.has('ShiftLeft') || k.has('ShiftRight');
-      wish.normalize().mulScalar(w.speed * (fast ? w.runMultiplier : 1) * w.unitsPerMetre);
+      // CLAMP, don't normalize. Normalizing is right for keys — it stops W+D
+      // being 1.41x faster than W — but it would also drag a gently-pushed stick
+      // back out to full walking speed, throwing away the one thing an analog
+      // control has over a key. A stick at 40% walks at 40%; a diagonal key pair
+      // still cannot exceed 1.
+      const len = wish.length();
+      if (len > 1) wish.mulScalar(1 / len);
+      wish.mulScalar(w.speed * (fastKeys(k) ? w.runMultiplier : 1) * w.unitsPerMetre);
       this.lastInteract = performance.now();
       this.beginSettle();
     }
@@ -931,7 +1295,21 @@ export class OrbitFlyCamera {
     e.preventDefault();
   };
 
+  /**
+   * A drag, in pixels. Converted straight to degrees and handed to applyLook, so
+   * the mouse/finger path and the look stick cannot drift apart: whatever the
+   * drag clamps, the stick clamps too.
+   */
   private orbit(dx: number, dy: number): void {
+    this.applyLook(-dx * this.rotSpeed, dy * this.rotSpeed);
+  }
+
+  /**
+   * Turn the view by explicit DEGREE deltas. dYaw adds to yaw; dPitch adds to
+   * pitch, and POSITIVE pitch looks DOWN (see the sign note below), so a gesture
+   * that should look down passes a positive dPitch.
+   */
+  private applyLook(dYaw: number, dPitch: number): void {
     this.lastInteract = performance.now();
     // FREE mode is mouselook: the eye stays put and the view swings around it,
     // like turning your head. Orbiting a pivot metres ahead instead swung the
@@ -940,7 +1318,7 @@ export class OrbitFlyCamera {
     // the eye now, move the angles, then re-derive the pivot to put it back.
     // HERO mode deliberately keeps true orbit — there the pivot is the point.
     const eye = this.heroMode ? null : this.eyePosition();
-    this.s.yaw -= dx * this.rotSpeed;
+    this.s.yaw += dYaw;
     // In close-up (sway mode only), clamp yaw to a front arc so the camera can't
     // swing behind the piece. Spin mode (central fixture) allows full 360°.
     if (this.heroMode && !this.heroSpin) {
@@ -967,7 +1345,7 @@ export class OrbitFlyCamera {
       min = -this.walk!.look.up;
       max = this.walk!.look.down;
     }
-    this.s.pitch = math.clamp(this.s.pitch + dy * this.rotSpeed, min, max);
+    this.s.pitch = math.clamp(this.s.pitch + dPitch, min, max);
     if (eye) {
       // target = eye - distance * dir, so the eye lands exactly where it was.
       this.s.target.copy(eye).sub(this.dirFrom(this.s.yaw, this.s.pitch).mulScalar(this.s.distance));

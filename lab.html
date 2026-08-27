@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>reveal-lab — Darilux</title>
+    <!--
+      DEV ONLY. Vite's default build input is the root index.html, so this file
+      and src/lab/* are served by `npm run dev` and are never emitted by
+      `npm run build`. Nothing here ships; do not add it to rollupOptions.input.
+    -->
+  </head>
+  <body>
+    <div id="lab">
+      <main id="lab-stage">
+        <canvas id="viewer"></canvas>
+        <div id="lab-hud">
+          <span id="lab-fps">—</span>
+          <span id="lab-renderer">—</span>
+          <span id="lab-splats">—</span>
+        </div>
+        <div id="lab-warn" hidden></div>
+      </main>
+
+      <aside id="lab-panel">
+        <header>
+          <h1>reveal&#8203;-lab</h1>
+          <p>Bloom reveal parameter explorer. Not shipped.</p>
+        </header>
+        <div id="lab-scenes"></div>
+        <canvas id="lab-curve" width="560" height="240"></canvas>
+        <div id="lab-controls"></div>
+        <footer>
+          <button id="lab-export" type="button">Export preset</button>
+          <button id="lab-reset" type="button" class="ghost">Reset</button>
+        </footer>
+      </aside>
+
+      <div id="lab-transport">
+        <button id="lab-replay" type="button" title="Replay the reveal">Replay</button>
+        <input id="lab-scrub" type="range" min="0" max="1000" value="1000" step="1" />
+        <output id="lab-scrub-read">t 1.000</output>
+      </div>
+    </div>
+    <script type="module" src="/src/lab/main.ts"></script>
+  </body>
+</html>

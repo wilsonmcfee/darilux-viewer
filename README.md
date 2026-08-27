@@ -22,6 +22,24 @@ npm run build        # type-checks, then bundles into dist/
 npm run preview      # serve the production build locally
 ```
 
+### Testing on a phone
+
+`server.host` is on, so the dev server already listens on every interface — the
+usual blocker is Windows Firewall, not config. Two routes:
+
+- **Tailscale** (no changes needed): open the Tailscale app on the phone and hit
+  `http://<this-machine's-100.x address>:5173/bluedio.html`. The Tailscale
+  interface is classed *Private*, so the existing inbound Node.js rule covers it.
+- **Plain Wi-Fi**: only works if that network is classed *Private*. A network
+  Windows has classed *Public* will silently refuse the connection even though
+  the server is listening. Either add a rule for TCP 5173 or reclassify the
+  network — both need an elevated shell.
+
+The mobile build is a genuinely different layout (portrait frame, thumb sticks,
+different help copy), so **desktop-narrow is not a substitute for a phone** for
+anything to do with feel. The knobs that let you tune it from the device are URL
+params — see `TEMPLATE.md` → "The tuning knobs".
+
 ## Where things live
 
 | File | What it's for |
@@ -31,14 +49,22 @@ npm run preview      # serve the production build locally
 | `src/main.ts` | Boots the app, loads one splat at a time, runs the frame loop. |
 | `src/camera.ts` | Orbit + fly camera, eased hero fly-ins, `__logPose()` helper. |
 | `src/heropoints.ts` | The floating 3D-anchored gear labels. |
+| `src/walk.ts` | Height-locked movement + the walkable-region SDF (Bluedio). |
+| `src/joystick.ts` | The two touch thumb sticks, and the "is this a touch device" test. |
+| `src/stage.ts` | The shared viewer chrome as markup, injected into every page. |
 | `src/device.ts` | WebGPU→WebGL2 device selection + the "unsupported browser" backstop. |
 | `src/ui.ts` / `src/style.css` | The overlay UI and the Darilux styling. |
+
+> **The deep documentation is `TEMPLATE.md`**, not this file. It is the
+> walkthrough for wiring a new scan in, and it is where walk mode, the touch
+> controls, the portrait layout, the tuning knobs and the performance notes are
+> written up properly. This README is orientation only.
 
 ## Authoring hero points (the human-in-the-loop step)
 
 A splat is millions of unlabeled points — nothing marks "this is the console," and code can't render the scene to pick coordinates. So poses are authored by eye, exactly like the pilot rig:
 
-1. `npm run dev`, click "Enter" on the demo's window, and move to the framing you want. Controls: **drag** orbits, **right-drag / Shift+wheel** pans, **wheel** zooms, and **WASD + Q/E** flies through the scene (**Shift** = faster) — the quickest way to get up close to a piece of gear.
+1. `npm run dev`, click "Enter" on the demo's window, and move to the framing you want. Controls: **drag** orbits, **right-drag / Shift+wheel** pans, **wheel** zooms, and **WASD + Q/E** flies through the scene (**Shift** = faster) — the quickest way to get up close to a piece of gear. On a phone the same scene is driven by **two thumb sticks** (left walks, right looks) and `Q/E`/wheel do not exist; authoring is a desktop job either way, and `?author` disables walk mode for it.
 2. In the browser console run `__logPose()` — it prints a ready-to-paste pose.
 3. Paste it into `demos.ts` as either the demo's `initialPose` (opening shot) or a hero point's `pose` (where the fly-in lands). Save — it hot-reloads.
 

@@ -215,6 +215,26 @@ export interface Demo {
    */
   src: string;
   /**
+   * OPTIONAL reduced bundle, loaded instead of `src` on a phone. Same format,
+   * same coordinates, fewer gaussians — so every authored pose, hero anchor and
+   * walk polygon keeps working untouched. Omit it and phones load `src`.
+   *
+   * This exists because splat COUNT is the one cost a phone cannot be talked out
+   * of. A device that falls back to WebGL2 — an older phone, or any in-app
+   * browser wrapping WKWebView — sorts the whole cloud on the CPU every time the
+   * camera moves, and that sort is LINEAR in the count. No resolution or fill
+   * setting touches it. When a sort overruns a frame the depth order lands stale
+   * and the picture swims rather than merely running slow.
+   *
+   * Bluedio's is built by `autoscene/mobile_asset.py` — see autoscene/RUNNING.md.
+   * It is deliberately NOT a uniform decimation: it crops the capture floaters,
+   * deletes the big-and-faint haze gaussians that carry about a third of all
+   * fill, and then keeps the top million by how much screen area they could ever
+   * occupy from anywhere a visitor can actually stand. Regenerate it whenever
+   * the walk region, the hero poses, or the source scan change.
+   */
+  srcMobile?: string;
+  /**
    * The opening shot when this demo loads. Set to null to auto-frame the scene
    * from its bounding box (used until a pose is authored with __logPose).
    */
@@ -237,6 +257,16 @@ export interface Demo {
   refAspect?: number;
   /** Navigation help shown by the stage's i button. Omit and the i is hidden. */
   guide?: DemoGuide;
+  /**
+   * The same help, rewritten for touch. Shown instead of `guide` on a phone.
+   *
+   * This is not a nicety. `guide` names W A S D, Shift and Esc — three things a
+   * phone does not have — so on the one device where the i button is the ONLY
+   * reachable explanation, the old copy described controls the visitor could not
+   * use. Falls back to `guide` when omitted, so a demo need only write this once
+   * it has touch controls worth describing.
+   */
+  guideTouch?: DemoGuide;
   /**
    * Height-locked walk movement for this demo (see WalkConfig). Omit for the
    * legacy free-fly. Only a scene with a KNOWN floor plane and metre scale can
@@ -440,6 +470,16 @@ export const DEMOS: Demo[] = [
       'A dense live room - drum kit, synth wall, DJ booth, red drapes. Ten hero ' +
       'points, each flying to a piece of gear you can orbit and read about.',
     src: 'splat/bluedio/meta.json', // SOGS bundle ("Bluedio_optimized.sog", 2,534,528 gaussians)
+    /* 1,200,000 gaussians / 18.0 MB, against the desktop bundle's 2,534,528 /
+       34.4 MB. Measured on the WebGL2 path, the depth sort drops from 20 ms to
+       8-10 ms — it is linear in the count, and that sort is what makes an older
+       phone feel laggy rather than merely soft. Visually it is very close: the
+       reduction MERGES neighbouring gaussians rather than deleting them, so
+       surfaces stay sealed. Verified by A/B against the full asset at the
+       opening pose and at a hero close-up.
+       Built by autoscene/mobile_asset.py + splat-transform; the exact commands
+       and the reasoning behind each stage are in autoscene/RUNNING.md. */
+    srcMobile: 'splat/bluedio-mobile/meta.json',
     cardStyle: 'hud-bottom',
     refAspect: 16 / 9,
 
@@ -461,6 +501,28 @@ export const DEMOS: Demo[] = [
       note:
         'You stay at standing height throughout, so the room is seen the way you ' +
         'would see it standing in it.',
+    },
+
+    /* The phone version of the same card, and the ONLY navigation instructions a
+       phone visitor can reach — the page copy is behind a frozen page, and the
+       desktop list above named W A S D, Shift and Esc, none of which exist on a
+       touch screen. Ordered by what a thumb finds first: the two sticks, then the
+       points, then the housekeeping. Deliberately says LEFT and RIGHT rather than
+       "the sticks", because at a glance both pads look identical and the whole
+       question a first-time visitor has is which one walks. */
+    guideTouch: {
+      title: 'Moving around',
+      keys: [
+        { key: 'Left stick', action: 'Walk — push it the way you want to go' },
+        { key: 'Right stick', action: 'Look around, as if turning your head' },
+        { key: 'Tap a point', action: 'Fly in for a closer look' },
+        { key: 'Arrows', action: 'Step to the next piece of gear' },
+        { key: 'Close ×', action: 'Leave a close-up and get the sticks back' },
+        { key: 'Toggle', action: 'Show or hide the points' },
+      ],
+      note:
+        'Push a stick gently to move slowly. You stay at standing height ' +
+        'throughout, so the room is seen the way you would see it standing in it.',
     },
 
     /* ---- WALK MODE -------------------------------------------------------

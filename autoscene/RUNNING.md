@@ -98,3 +98,123 @@ working folder: `scene_cloud_8heroes.json` (cloud export) and
 `scene_v1_9heroes.json` (the original run, with the duplicate hero). The raw
 `Bluedio_optimized.sog` and the capture frames live there too — they are far too
 large to commit, and the decode default above means you do not need them.
+
+## mobile_asset.py — the reduced bundle for phones
+
+`src/demos.ts` carries an optional `srcMobile` beside `src`. Phones load it;
+everything else loads the full scene. It exists because splat **count** is the
+one mobile cost no renderer setting can reduce: a device that falls back to
+WebGL2 — an older phone, or any in-app browser wrapping WKWebView — sorts the
+whole cloud on the CPU every time the camera moves, and that sort is linear in
+the count. Measured on the WebGL2 path with `?gl`:
+
+| bundle | gaussians | download | depth sort |
+|---|---|---|---|
+| `bluedio` (desktop) | 2,534,528 | 34.4 MB | 20 ms |
+| `bluedio-mobile` | 1,200,000 | 18.0 MB | 8–10 ms |
+
+When a sort overruns a frame the depth order lands stale, and the picture
+*swims* rather than merely running slow. That is the failure this fixes, and
+`?stats` puts the sort time on screen so you can see which side of the line a
+device is on.
+
+### Building it
+
+Three commands. The Python pass does the two things `splat-transform` cannot
+express; `splat-transform` does the decimation and the encode.
+
+    UV="$LOCALAPPDATA/Microsoft/WinGet/Packages/astral-sh.uv_Microsoft.Winget.Source_8wekyb3d8bbwe/uv.exe"
+    ST="npx -y @playcanvas/splat-transform@3.3.0"
+    SRC="../Bluedio Experience/Hi Def Bluedio.ply"
+
+    # 0. the reachable camera set, read from demos.ts so it cannot drift
+    node --experimental-strip-types autoscene/reachable.mjs > autoscene/reachable.json
+
+    # 1. crop the far tail + delete the fog gaussians   (~2 s)
+    "$UV" run --with 'numpy>=2' --with scipy python autoscene/mobile_asset.py \
+        "$SRC" "$TEMP/bluedio_cut.ply"
+
+    # 2. adaptive decimation to the target count        (~30 s)
+    $ST "$TEMP/bluedio_cut.ply" --filter-nan \
+        --decimate-adaptive 1200000 "$TEMP/bluedio_1v2m.ply"
+
+    # 3. encode to an unbundled SOGS directory          (~7 s)
+    mkdir -p public/splat/bluedio-mobile
+    $ST "$TEMP/bluedio_1v2m.ply" --filter-nan --filter-harmonics 1 -m -i 3 \
+        --max-workers 8 public/splat/bluedio-mobile/meta.json
+
+Step 0 must be re-run whenever the walk region or the hero poses change — it
+reads both out of `src/demos.ts`. Steps 1–3 must be re-run whenever the source
+scan changes.
+
+`-i 3` in step 3 is not cosmetic. The SH codebook k-means defaults to 10
+iterations and took **over ten minutes** on this input at that setting, against
+6.5 s at 3, for no visible difference. `--max-workers 8` is free on any modern
+machine. `splat-transform` also does **not** create its output directory — the
+`mkdir -p` is required or step 3 fails with a bare ENOENT on a temp file.
+
+### What each stage does, and why it is that stage
+
+**The crop (`--box`, default ±45 raw units)** is much looser than it looks like
+it should be, and that is the point. The room is only ~17 raw units across, so a
+tight box is tempting. Measured, it is wrong:
+
+| half-box | removed | consequence |
+|---|---|---|
+| ±12 | 145,346 | the view through the windows disappears |
+| ±16 | 108,510 | right-hand window goes visibly black in an A/B |
+| ±45 | 13,966 | only the genuine floaters |
+
+The windows look out onto real reconstructed foliage 12–40 units away. What the
+crop is actually for is the far tail: 384 gaussians past r=100 with a median
+max-axis scale of 6.9 units, against 0.036 inside the room. They cost real fill,
+and because the resource AABB is taken from the extremes they stretch the depth
+sort's quantisation range over ~±570 units for a room occupying ~30. Cropping at
+±45 tightens the AABB more than 12×, which sharpens the sort key for *every*
+splat, and costs 0.55% of the count.
+
+**The fog cut** deletes gaussians that are faint AND large (default: opacity
+≤ 0.08 and max-axis scale ≥ 0.2 raw units) — about 103,000 of them, ~4% of the
+cloud, carrying roughly a third of all projected screen area. These are the
+classic 3DGS haze splats: individually invisible, collectively the single
+largest block of fragment work in the scene. This cannot be done in
+`splat-transform`, for two independent reasons — chained `-V` filters AND
+together so they cannot express the complement of an AND, and `-V scale_0` tests
+only the first scale axis rather than the max.
+
+**The decimation** is `--decimate-adaptive`, and the "adaptive" matters more
+than the target does. It MERGES neighbouring gaussians (818K merges at the 1.6M
+target) so survivors inherit the extent of what they replace. Plain deletion at
+this rate does not work — see the next section.
+
+### Measured dead end: significance pruning
+
+`mobile_asset.py --target N` implements the idea that looks best on paper and
+does not survive contact. Because this viewer has no free flight, the reachable
+camera set is small and enumerable, so each splat can be scored at its worst
+case — `opacity * (max_scale / nearest_reachable_distance)²` — and the top N
+kept. That should beat LightGaussian/RadSplat-style scoring, which only has
+training views to work with.
+
+At N = 1,000,000 the scene developed **dark blotches across the ceiling, the
+floor and the rug**, obvious against the full asset. The ranking is not the
+problem; the deletion is. Flat surfaces reconstruct as a mat of small gaussians,
+and removing half of them leaves holes that expose darker material behind. The
+published 0.6+ pruning ratios all *fine-tune the remaining gaussians afterwards*,
+which grows them back over the gaps — a step we cannot run.
+
+So `--target` defaults to **0 (off)** and the decimation is handed to
+`--decimate-adaptive`, which merges instead. The flag is kept because the
+reachable-camera machinery is correct and is probably the right tool for
+choosing what goes in a low LOD level, where holes at distance matter far less.
+
+### Also measured, also negative: LOD / streamed SOG
+
+`splat-transform … out/lod-meta.json` produces a chunked octree but reports
+`lodLevels: 1` — it does **not** synthesise an LOD pyramid from one input. Real
+levels need `--tag-lod` with a separately decimated file per level, and
+`--decimate-adaptive` "must be the final action, with a `.ply` output", so that
+is one full pass per level. Worth doing eventually — it is the mechanism
+SuperSplat's own viewer uses, and it is the only thing that would unlock
+`app.scene.gsplat.splatBudget`, which is otherwise a hard no-op on a flat SOGS
+bundle. It was not worth it for the first pass.

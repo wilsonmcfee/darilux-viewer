@@ -17,3 +17,8 @@ autoscene/__pycache__/
 *.ply
 *.psht
 *.spz.original
+
+# Generated from src/demos.ts by autoscene/reachable.mjs. Regenerable in a
+# second, and stale the moment the walk region or a hero pose moves — so it is
+# a build input, not a source of truth. Regenerate rather than trusting a copy.
+autoscene/reachable.json

@@ -18,7 +18,14 @@
       rel="stylesheet"
     />
   </head>
-  <body>
+  <!-- `reel` is a POSITIVE hook and it is load-bearing, not decorative. The
+       paper treatment for #disclaimer-open — a pill border plus an infinite red
+       pulse ring — belongs to this page alone. Scoping it by NEGATION made it
+       the default that every dark page had to remember to opt out of, and the
+       negation also out-specified the prefers-reduced-motion override that is
+       supposed to stop the pulse. See the note beside `body.reel
+       #disclaimer-open` in style.css. -->
+  <body class="reel">
     <!-- ======================================================================
          THE STAGE — one shared 3D viewport (canvas + overlays), created once
          and MOVED into whichever .viewer window the visitor enters. Only one

@@ -28,6 +28,11 @@ export default defineConfig({
       input: {
         index: resolve(__dirname, 'index.html'),
         bluedio: resolve(__dirname, 'bluedio.html'),
+        // The docked phone layout — scene in a 4:3 window, controls underneath.
+        // Deliberately a THIRD page rather than a replacement: bluedio.html is
+        // still the more immersive one on a fast phone, and keeping both means
+        // choosing between them is a link rather than a revert.
+        'bluedio-phone': resolve(__dirname, 'bluedio-phone.html'),
       },
     },
   },
