@@ -6,7 +6,7 @@
    Keep the two in sync.
    ========================================================================== */
 
-import { brandName } from './brand';
+import { brandName } from '../core/brand';
 
 export const disclaimerHtml = (): string => `
   <h2 id="disclaimer-title">About this demo</h2>

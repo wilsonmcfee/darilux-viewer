@@ -29,8 +29,8 @@ import './lab.css';
 
 import { DEMOS } from '../demos';
 import type { Demo } from '../types';
-import { createDevice } from '../device';
-import { OrbitFlyCamera } from '../camera';
+import { createDevice } from '../core/device';
+import { OrbitFlyCamera } from '../core/camera';
 import { RevealDriver, prefersReducedMotion } from '../reveal/driver';
 import {
   DEFAULTS,

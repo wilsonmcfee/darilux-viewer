@@ -12,7 +12,7 @@
    ========================================================================== */
 
 import { Entity, Vec3 } from 'playcanvas';
-import type { Demo, HeroPoint } from './types';
+import type { Demo, HeroPoint } from '../types';
 
 interface Marker {
   hero: HeroPoint;

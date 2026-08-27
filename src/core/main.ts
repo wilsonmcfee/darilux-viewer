@@ -29,18 +29,18 @@ import {
   RESOLUTION_AUTO,
   type BoundingBox,
 } from 'playcanvas';
-import './style.css';
+import '../style.css';
 
-import { BRAND, DEMOS } from './demos';
-import type { Demo, HeroPoint, Pose } from './types';
+import { BRAND, DEMOS } from '../demos';
+import type { Demo, HeroPoint, Pose } from '../types';
 import { setBrand, logTag } from './brand';
 import { createDevice, canRender } from './device';
 import { OrbitFlyCamera } from './camera';
-import { HeroPointManager } from './heropoints';
+import { HeroPointManager } from '../nav/heropoints';
 import { SplatPicker } from './splatpick';
 import { mountChrome } from './stage';
-import { TouchSticks, wantsTouchControls } from './joystick';
-import { PerfHud } from './perfhud';
+import { TouchSticks, wantsTouchControls } from '../nav/joystick';
+import { PerfHud } from '../ui/perfhud';
 import {
   SplatQualityControl,
   MOBILE_PRESET,
@@ -48,8 +48,8 @@ import {
   ENGINE_DEFAULTS,
   type SplatQuality,
 } from './splatquality';
-import { mountPhoneDock } from './phonedock';
-import { UI } from './ui';
+import { mountPhoneDock } from '../ui/phonedock';
+import { UI } from '../ui/ui';
 
 // Hand the deployment's identity to the engine before anything logs or renders
 // brand-flavoured copy. Module top-level so it precedes every boot path.

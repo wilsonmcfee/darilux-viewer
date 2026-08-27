@@ -9,9 +9,9 @@
    #stage element that main.ts moves into whichever window is live.
    ========================================================================== */
 
-import type { Demo, DemoGuide, HeroPoint } from './types';
+import type { Demo, DemoGuide, HeroPoint } from '../types';
 import { disclaimerHtml } from './disclaimer';
-import { wantsTouchControls } from './joystick';
+import { wantsTouchControls } from '../nav/joystick';
 
 interface UICallbacks {
   /** Visitor clicked "Enter" on a window. */

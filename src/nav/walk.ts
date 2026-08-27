@@ -31,7 +31,7 @@
    boundary. No other function in this file sees a world unit.
    ========================================================================== */
 
-import type { WalkRegion } from './types';
+import type { WalkRegion } from '../types';
 
 const smoothstep = (edge: number, x: number): number => {
   if (edge <= 0) return x > 0 ? 1 : 0;

@@ -42,7 +42,7 @@
    ========================================================================== */
 
 /** Ids moved into the dock, in the order they should sit in it. */
-import { logTag } from './brand';
+import { logTag } from '../core/brand';
 
 const DOCKED_IDS = ['hero-card', 'info-card', 'touch-controls', 'stage-controls'] as const;
 

@@ -20,8 +20,8 @@
 
 import { Entity, Vec3, math } from 'playcanvas';
 import { logTag } from './brand';
-import type { Pose, WalkConfig } from './types';
-import { WalkConstraint } from './walk';
+import type { Pose, WalkConfig } from '../types';
+import { WalkConstraint } from '../nav/walk';
 
 const RAD = Math.PI / 180;
 const DEG = 180 / Math.PI;
