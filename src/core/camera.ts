@@ -22,16 +22,16 @@ import { Entity, Vec3, math } from 'playcanvas';
 import { logTag } from './brand';
 import type { Pose, WalkConfig } from '../types';
 import { WalkConstraint } from '../nav/walk';
-
-const RAD = Math.PI / 180;
-const DEG = 180 / Math.PI;
-
-const easeInOutCubic = (t: number): number =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-// Shortest signed angular delta (degrees) so a fly-in never spins the long way.
-const shortestAngle = (from: number, to: number): number =>
-  ((((to - from) % 360) + 540) % 360) - 180;
+import {
+  RAD,
+  DEG,
+  easeInOutCubic,
+  cloneState,
+  stateFromPose,
+  FlyAnimation,
+  type OrbitState,
+} from './flyto';
+import { HeroOrbit } from './orbit';
 
 // WASD + Q/E free-fly keys (authoring aid). Shift = move faster.
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE']);
@@ -64,9 +64,6 @@ const WALK_PIN_EPS = 1e-3;
 // inside the 1.6s fly-in that triggers it.
 const HERO_LIFT_TAU = 0.35;
 
-// Default auto-orbit feel (per-hero overrides can replace any of these).
-const DEFAULT_ORBIT = { speed: 7.5, ease: 6, amplitude: 30, yawLimit: 60 };
-
 /* Thresholds below which a change in the camera does not count as motion, used
    only by the movedThisFrame signal that drives on-demand rendering. Sized to
    clear float residue rather than to be perceptually just-noticeable — see the
@@ -85,14 +82,6 @@ type WalkState = Omit<Required<WalkConfig>, 'look' | 'region'> & {
   look: { down: number; up: number } | null;
 };
 
-interface OrbitState {
-  target: Vec3;
-  distance: number;
-  yaw: number;   // degrees, around world +Y
-  pitch: number; // degrees, clamped away from the poles
-  fov: number;   // vertical degrees
-}
-
 export class OrbitFlyCamera {
   private cam: Entity;
   private canvas: HTMLCanvasElement;
@@ -105,14 +94,11 @@ export class OrbitFlyCamera {
     fov: 55,
   };
 
-  // Fly-in animation state.
-  private flying = false;
-  private flyT = 0;
-  private flyDuration = 1;
-  private flyFrom!: OrbitState;
-  private flyGoal!: OrbitState;
-  private flyYawDelta = 0;
-  private onArrive?: () => void;
+  // Fly-in animation (flyto.ts) — writes this.s by reference through applyFn.
+  private fly = new FlyAnimation();
+  // Shared with the two extracted state machines so their writes land exactly
+  // where the inline code's did.
+  private applyFn = (): void => this.apply();
 
   // Aspect compensation. Pose fov values are VERTICAL degrees, authored in a
   // window of this aspect (width / height, set per demo from demos.ts). When
@@ -158,26 +144,10 @@ export class OrbitFlyCamera {
 
   // Hero close-up mode: gentle auto-orbit around the subject + view constraints
   // so the visitor can look around a piece of gear but not wander off it.
+  // The arc/sway state machine lives in orbit.ts; the camera keeps the mode
+  // flag and the idle timing, because every input path already writes them.
   private heroMode = false;
-  private heroSpin = false;      // true = continuous full 360° turntable (no sway, no yaw clamp)
-  private heroStill = false;     // true = no auto motion at all (mode 'none')
-  private heroMinDistance = 0.5;
-  private heroMaxDistance = 6;
-  private heroPitchMin = -35;
-  private heroPitchMax = 85;
-  private heroCenterYaw = 0;      // the hero's front-facing yaw (from its pose)
-  // Yaw bounds are stored as an explicit RANGE relative to heroCenterYaw, not a
-  // ± half-width, because the useful arc is often not centred on where the
-  // fly-in lands: a hero backed against a wall needs an arc that simply
-  // excludes the wall. heroYaw* bounds manual dragging; sway* is the narrower
-  // idle-motion window inside it.
-  private heroYawMin = -60;
-  private heroYawMax = 60;
-  private swayMin = -30;
-  private swayMax = 30;
-  private autoOrbitDir = 1;        // current sway direction (+1 / -1)
-  private autoOrbitSpeed = 7.5;  // degrees/second at mid-swing (eases at the ends)
-  private autoOrbitEase = 6;     // degrees near each end over which speed eases down
+  private heroOrbit = new HeroOrbit();
   private autoOrbitDelay = 1500; // ms of no input before auto-orbit (re)starts
   private lastInteract = 0;      // performance.now() of the last user input
 
@@ -482,10 +452,10 @@ export class OrbitFlyCamera {
 
   /** Snap instantly to a pose (used when a new demo loads). */
   setPose(pose: Pose): void {
-    this.flying = false;
+    this.fly.cancel();
     this.heroMode = false;
-    this.heroSpin = false;
-    this.s = this.stateFromPose(pose);
+    this.heroOrbit.reset();
+    this.s = stateFromPose(pose);
     this.moveReference = this.s.distance;
     // A scene whose opening shot was authored above the walk plane starts there
     // and STAYS there: the descent is armed, not performed, so the establishing
@@ -520,49 +490,11 @@ export class OrbitFlyCamera {
     const framePose: Pose = opts?.pivot
       ? { position: pose.position, target: opts.pivot, fov: pose.fov }
       : pose;
-    const goal = this.stateFromPose(framePose);
-    // Zoom band: allow a bit closer, but not far enough to lose the subject.
-    this.heroMinDistance = Math.max(goal.distance * 0.4, 0.2);
-    this.heroMaxDistance = goal.distance * 1.8;
-    this.heroCenterYaw = goal.yaw; // sway + orbit limits are measured from here
-    this.heroSpin = opts?.mode === 'spin';
-    this.heroStill = opts?.mode === 'none';
-    this.autoOrbitDir = opts?.direction === -1 ? -1 : 1;
-    // Per-hero auto-orbit feel (falls back to defaults).
-    this.autoOrbitSpeed = opts?.speed ?? DEFAULT_ORBIT.speed;
-    this.autoOrbitEase = opts?.ease ?? DEFAULT_ORBIT.ease;
-    // Arc model. `arc` is the authoritative yaw range for this hero, in degrees
-    // relative to the landing yaw, and may be asymmetric. Without it, fall back
-    // to the symmetric ±yawLimit shorthand. Both are recomputed on EVERY fly-in,
-    // not only when overridden, or one tight hero would leak its arc onto the
-    // next hero visited.
-    const lim = opts?.yawLimit ?? DEFAULT_ORBIT.yawLimit;
-    const raw = opts?.arc ?? [-lim, lim];
-    const lo = Math.min(raw[0], raw[1]);
-    const hi = Math.max(raw[0], raw[1]);
-    this.heroYawMin = lo;
-    this.heroYawMax = hi;
-    // Idle sway is a quarter of the arc wide by default, keeping resting motion
-    // subtler than what dragging allows — the split the rig always had. For the
-    // default ±60 arc that lands on exactly ±30, identical to the amplitude it
-    // replaces. An explicit `amplitude` overrides the width.
-    const half =
-      opts?.amplitude !== undefined
-        ? Math.min(opts.amplitude, (hi - lo) / 2)
-        : (hi - lo) / 4;
-    // The window is centred on the LANDING yaw (offset 0), not on the middle of
-    // the arc, so the authored framing is always part of the idle motion. An
-    // earlier version centred it on the arc, which on a one-sided arc such as
-    // [0, 40] produced a window of [10, 30] that excluded the landing point: the
-    // camera ran full-speed from 0 to 10, then pendulumed 10<->30 and never came
-    // back — reading as two separate arcs. When the window would fall outside the
-    // arc, SHIFT it in rather than shrinking it, so it keeps its intended width.
-    let sLo = -half;
-    let sHi = half;
-    if (sLo < lo) { sHi += lo - sLo; sLo = lo; }
-    if (sHi > hi) { sLo -= sHi - hi; sHi = hi; }
-    this.swayMin = Math.max(sLo, lo);
-    this.swayMax = Math.min(sHi, hi);
+    const goal = stateFromPose(framePose);
+    // Arc, sway window, zoom band, spin/still — all per-hero, all recomputed on
+    // EVERY fly-in so one tight hero cannot leak its arc onto the next. The
+    // detail (and the one-sided-arc lesson) lives in orbit.ts.
+    this.heroOrbit.configure(goal, opts);
     // A close-up requested mid-descent COMPLETES the descent rather than
     // freezing it: the visitor asked to be somewhere else, and marking it
     // settled is what makes flyTo() land them back on the plane on exit.
@@ -581,7 +513,7 @@ export class OrbitFlyCamera {
   /** Leave close-up mode: restore free orbit / pan / zoom / fly. */
   exitHero(): void {
     this.heroMode = false;
-    this.heroSpin = false;
+    this.heroOrbit.reset();
   }
 
   /**
@@ -590,7 +522,7 @@ export class OrbitFlyCamera {
    * to fit the whole scene in view.
    */
   frameBounds(center: Vec3, radius: number, fov = 60): void {
-    this.flying = false;
+    this.fly.cancel();
     this.heroMode = false;
     const dir = new Vec3(2, 1, 2).normalize();
     const yaw = Math.atan2(dir.x, dir.z) * DEG;
@@ -604,8 +536,7 @@ export class OrbitFlyCamera {
 
   /** Eased fly to a pose; control returns to the visitor on arrival. */
   flyTo(pose: Pose, duration = 1.4, onArrive?: () => void): void {
-    this.flyFrom = this.cloneState(this.s);
-    this.flyGoal = this.stateFromPose(pose);
+    const goal = stateFromPose(pose);
     // Once the visitor is walking, a fly-in that is NOT a hero close-up — in
     // practice the "exit close-up" return home, whose pose was authored well
     // above head height — has to LAND on the walk plane, or the pin would jerk
@@ -614,32 +545,26 @@ export class OrbitFlyCamera {
     // deliberate heights.
     if (this.walkEnabled && this.walkSettled && !this.heroMode) {
       const look = this.walk!.look;
-      if (look) this.flyGoal.pitch = math.clamp(this.flyGoal.pitch, -look.up, look.down);
-      this.flyGoal.target.y =
-        this.walkY - this.flyGoal.distance * Math.sin(this.flyGoal.pitch * RAD);
+      if (look) goal.pitch = math.clamp(goal.pitch, -look.up, look.down);
+      goal.target.y = this.walkY - goal.distance * Math.sin(goal.pitch * RAD);
       // ...and land INSIDE the region. Brief §6: on hero exit, ease to the
       // nearest point where d >= 0. The home pose is the opening shot, which is
       // authored for its framing and sits outside — flying back to it verbatim
       // would drop the visitor out of bounds and let the backstop shove them.
       if (this.region) {
-        const g = this.flyGoal;
-        const cp = Math.cos(g.pitch * RAD);
-        const ex = g.target.x + g.distance * cp * Math.sin(g.yaw * RAD);
-        const ez = g.target.z + g.distance * cp * Math.cos(g.yaw * RAD);
+        const cp = Math.cos(goal.pitch * RAD);
+        const ex = goal.target.x + goal.distance * cp * Math.sin(goal.yaw * RAD);
+        const ez = goal.target.z + goal.distance * cp * Math.cos(goal.yaw * RAD);
         this.region.nearestInside(ex, ez, this.moveTmp);
-        g.target.x += this.moveTmp.x - ex;
-        g.target.z += this.moveTmp.z - ez;
+        goal.target.x += this.moveTmp.x - ex;
+        goal.target.z += this.moveTmp.z - ez;
       }
     }
-    this.flyYawDelta = shortestAngle(this.flyFrom.yaw, this.flyGoal.yaw);
-    this.flyDuration = duration;
-    this.flyT = 0;
-    this.flying = true;
-    this.onArrive = onArrive;
+    this.fly.start(cloneState(this.s), goal, duration, onArrive);
   }
 
   get isFlying(): boolean {
-    return this.flying;
+    return this.fly.isFlying;
   }
 
   /* ---- Motion signal, for on-demand rendering ----------------------------
@@ -719,23 +644,8 @@ export class OrbitFlyCamera {
       }
     }
 
-    if (this.flying) {
-      this.flyT += dt / this.flyDuration;
-      const k = easeInOutCubic(Math.min(this.flyT, 1));
-      const a = this.flyFrom;
-      const b = this.flyGoal;
-      this.s.target.lerp(a.target, b.target, k);
-      this.s.distance = math.lerp(a.distance, b.distance, k);
-      this.s.yaw = a.yaw + this.flyYawDelta * k;
-      this.s.pitch = math.lerp(a.pitch, b.pitch, k);
-      this.s.fov = math.lerp(a.fov, b.fov, k);
-      if (this.flyT >= 1) {
-        this.flying = false;
-        this.onArrive?.();
-        this.onArrive = undefined;
-      }
-      this.apply();
-    }
+    // Advance an in-progress fly-in (no-op otherwise) — see flyto.ts.
+    this.fly.tick(dt, this.s, this.applyFn);
     /* Right stick: look. A held stick is a rate, so unlike a drag it has to be
        integrated per frame rather than applied per event.
 
@@ -748,7 +658,7 @@ export class OrbitFlyCamera {
        rate high enough to cross the room feels twitchy at the small deflections
        used to settle onto a hero dot; the 0.35 floor keeps a gentle push from
        feeling dead altogether. */
-    if (!this.flying && (this.lookAxis.x !== 0 || this.lookAxis.y !== 0)) {
+    if (!this.fly.isFlying && (this.lookAxis.x !== 0 || this.lookAxis.y !== 0)) {
       const expo = (v: number): number => v * (0.35 + 0.65 * Math.abs(v));
       const r = this.lookRate * dt;
       // Signs match a DRAG exactly (see orbit()): stick right turns right, and
@@ -762,7 +672,7 @@ export class OrbitFlyCamera {
     // Walk mode: advance the opening-shot descent, then re-assert the eye plane.
     // Both run AFTER movement (so they see this frame's translation) and are
     // skipped during a fly-in, which lands on the plane by itself — see flyTo().
-    if (this.walkEnabled && !this.heroMode && !this.flying) {
+    if (this.walkEnabled && !this.heroMode && !this.fly.isFlying) {
       if (this.walkSettling) {
         this.settleT += dt / Math.max(this.walk!.settle, 1e-3);
         const k = easeInOutCubic(Math.min(this.settleT, 1));
@@ -792,36 +702,15 @@ export class OrbitFlyCamera {
     }
 
     // Subtle auto-orbit in hero close-up mode, once the fly-in has landed and the
-    // visitor has been idle for a moment. Any interaction pauses it (see lastInteract).
+    // visitor has been idle for a moment. Any interaction pauses it (see
+    // lastInteract). The sway/spin machinery itself lives in orbit.ts.
     if (
       this.heroMode &&
-      !this.heroStill && // mode 'none': hold the framing — no auto motion
-      !this.flying &&
+      !this.fly.isFlying &&
       this.pressedKeys.size === 0 &&
       performance.now() - this.lastInteract > this.autoOrbitDelay
     ) {
-      if (this.heroSpin) {
-        // Continuous full turntable — constant speed, no reversal, no clamp.
-        this.s.yaw += this.autoOrbitDir * this.autoOrbitSpeed * dt;
-      } else {
-        // Pendulum sway: reverse direction at ±amplitude from the front-facing yaw.
-        const offset = shortestAngle(this.heroCenterYaw, this.s.yaw); // yaw − center, in [-180,180]
-        if (offset >= this.swayMax) this.autoOrbitDir = -1;
-        else if (offset <= this.swayMin) this.autoOrbitDir = 1;
-        // Ease speed down toward each turning point (smoothstep) so the reversal is
-        // gentle, not abrupt — never fully stalls (15% floor) so it always comes back.
-        // A one-sided arc lands the camera OUTSIDE its sway window (offset 0 with a
-        // window of, say, [-37.5, -12.5]); run at full speed until it arrives
-        // rather than crawling in at the 15% floor.
-        const inside = offset >= this.swayMin && offset <= this.swayMax;
-        const distToEdge = inside
-          ? Math.min(offset - this.swayMin, this.swayMax - offset)
-          : Infinity;
-        const t = math.clamp(distToEdge / this.autoOrbitEase, 0, 1);
-        const factor = 0.15 + 0.85 * (t * t * (3 - 2 * t));
-        this.s.yaw += this.autoOrbitDir * this.autoOrbitSpeed * factor * dt;
-      }
-      this.apply();
+      this.heroOrbit.tick(dt, this.s, this.applyFn);
     }
 
     /* Did any of that actually move the camera? `moved` may already be true
@@ -895,16 +784,6 @@ export class OrbitFlyCamera {
 
   // ---- internals ---------------------------------------------------------
 
-  private stateFromPose(pose: Pose): OrbitState {
-    const target = new Vec3(pose.target[0], pose.target[1], pose.target[2]);
-    const pos = new Vec3(pose.position[0], pose.position[1], pose.position[2]);
-    const dir = new Vec3().sub2(pos, target);
-    const distance = Math.max(dir.length(), 1e-4);
-    const pitch = Math.asin(math.clamp(dir.y / distance, -1, 1)) * DEG;
-    const yaw = Math.atan2(dir.x, dir.z) * DEG;
-    return { target, distance, yaw, pitch, fov: pose.fov };
-  }
-
   /** Unit vector pointing from the pivot toward the eye (matches apply()). */
   private dirFrom(yaw: number, pitch: number): Vec3 {
     const cp = Math.cos(pitch * RAD);
@@ -914,10 +793,6 @@ export class OrbitFlyCamera {
   /** Current eye position, derived from orbit params rather than the entity. */
   private eyePosition(): Vec3 {
     return this.dirFrom(this.s.yaw, this.s.pitch).mulScalar(this.s.distance).add(this.s.target);
-  }
-
-  private cloneState(s: OrbitState): OrbitState {
-    return { target: s.target.clone(), distance: s.distance, yaw: s.yaw, pitch: s.pitch, fov: s.fov };
   }
 
   /** Write orbit params → camera transform + fov. */
@@ -981,10 +856,7 @@ export class OrbitFlyCamera {
 
   private interrupt(): void {
     this.lastInteract = performance.now(); // pauses auto-orbit
-    if (this.flying) {
-      this.flying = false;
-      this.onArrive = undefined;
-    }
+    this.fly.cancel(); // drops onArrive — see flyto.ts
     this.onUserInteract?.();
   }
 
@@ -1322,13 +1194,8 @@ export class OrbitFlyCamera {
     this.s.yaw += dYaw;
     // In close-up (sway mode only), clamp yaw to a front arc so the camera can't
     // swing behind the piece. Spin mode (central fixture) allows full 360°.
-    if (this.heroMode && !this.heroSpin) {
-      const offset = math.clamp(
-        shortestAngle(this.heroCenterYaw, this.s.yaw),
-        this.heroYawMin,
-        this.heroYawMax,
-      );
-      this.s.yaw = this.heroCenterYaw + offset;
+    if (this.heroMode && !this.heroOrbit.spin) {
+      this.s.yaw = this.heroOrbit.clampYaw(this.s.yaw);
     }
     // Pitch sign, since three sets of limits now depend on it: POSITIVE pitch
     // puts the eye ABOVE the pivot, i.e. looking DOWN.
@@ -1336,8 +1203,8 @@ export class OrbitFlyCamera {
     let max = this.pitchLimit;
     if (this.heroMode) {
       // Tighter pitch limits in close-up keep a flattering view of the subject.
-      min = this.heroPitchMin;
-      max = this.heroPitchMax;
+      min = this.heroOrbit.pitchMin;
+      max = this.heroOrbit.pitchMax;
     } else if (this.walkEnabled && this.walk!.look) {
       // Only if this demo asks for it. WALK_IMPLEMENTATION_BRIEF §5 is explicit:
       // look is FREE. "Being unable to turn your head reads as claustrophobic;
@@ -1381,8 +1248,8 @@ export class OrbitFlyCamera {
     }
     this.s.distance = math.clamp(
       this.s.distance * (1 + delta * this.zoomSpeed),
-      this.heroMinDistance,
-      this.heroMaxDistance,
+      this.heroOrbit.minDistance,
+      this.heroOrbit.maxDistance,
     );
     this.apply();
   }
