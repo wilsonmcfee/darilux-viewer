@@ -31,7 +31,8 @@ import {
 } from 'playcanvas';
 import './style.css';
 
-import { BRAND, DEMOS, type Demo, type HeroPoint, type Pose } from './demos';
+import { BRAND, DEMOS } from './demos';
+import type { Demo, HeroPoint, Pose } from './types';
 import { setBrand, logTag } from './brand';
 import { createDevice, canRender } from './device';
 import { OrbitFlyCamera } from './camera';

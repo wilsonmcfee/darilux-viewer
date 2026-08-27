@@ -20,7 +20,7 @@
 
 import { Entity, Vec3, math } from 'playcanvas';
 import { logTag } from './brand';
-import type { Pose, WalkConfig } from './demos';
+import type { Pose, WalkConfig } from './types';
 import { WalkConstraint } from './walk';
 
 const RAD = Math.PI / 180;

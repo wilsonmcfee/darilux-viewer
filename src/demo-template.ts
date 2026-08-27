@@ -15,7 +15,7 @@
    The companion prose walkthrough is TEMPLATE.md in the repo root.
    ========================================================================== */
 
-import type { Demo } from './demos';
+import type { Demo } from './types';
 
 /* ---------------------------------------------------------------------------
    THE COORDINATE CONTRACT — the thing that wastes the most time if missed.

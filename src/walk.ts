@@ -31,75 +31,7 @@
    boundary. No other function in this file sees a world unit.
    ========================================================================== */
 
-/** An island: an oriented rectangle subtracted from the region, plus its pad. */
-export interface WalkHole {
-  /** Centre in world units, (x, z). */
-  centre: [number, number];
-  /** Half-width / half-depth in world units, along the rect's own axes. */
-  halfExtent: [number, number];
-  /** Rotation of the rect's local +x axis, degrees CCW in the (x, z) plane. */
-  angleDeg?: number;
-  /**
-   * Standoff in METRES, inflating the hole outward. The two standoffs exist for
-   * different reasons: tall gear (rack, console, meterbridge) wants an OPTICAL
-   * pad of ~0.5 m, because close contact fills the frame with the least
-   * reconstructed geometry in the scene. Low furniture only wants ~0.15-0.20 m,
-   * for plausibility — it never enters the render badly, it is just implausible
-   * to stand inside a couch.
-   */
-  pad?: number;
-}
-
-/**
- * A local override of the boundary falloff, over an axis-aligned box.
- *
- * The falloff is a compromise: wide enough that a wall never feels like a stop,
- * narrow enough that a corridor still has a full-speed core. In a room with both
- * open floor and a thin connecting channel there is no single value that suits
- * both — 0.25 m is right in the open and swallows a 0.35 m channel whole. So the
- * channel gets its own.
- */
-export interface WalkFalloffZone {
-  /** Box corner in WORLD units, (x, z). Order does not matter. */
-  min: [number, number];
-  max: [number, number];
-  /** Falloff to use inside the box, METRES. */
-  falloff: number;
-  /** Free-text; ignored. Say why the zone exists. */
-  note?: string;
-}
-
-/** A walkable region: an outer ring, minus any inner rings and island rects. */
-export interface WalkRegion {
-  /** Outer boundary, world (x, z). Winding does not matter — see pointInRing. */
-  outer: [number, number][];
-  /** Interior boundaries from plan-fill: architecture, alcoves. */
-  innerRings?: [number, number][][];
-  /** Island furniture as oriented rects. */
-  holes?: WalkHole[];
-  /**
-   * Boundary softening distance in METRES. Movement INTO the boundary scales by
-   * smoothstep(0, falloff, d). Larger reads as gentler, but starts damping
-   * further out — which in a tight room means most of the floor. Default 0.25.
-   */
-  falloff?: number;
-  /**
-   * Local falloff overrides. The effective falloff at a point is the SMALLEST of
-   * the global value and every zone containing it, so zones may overlap and the
-   * tightest wins. A hard switch at a zone edge is deliberate and unnoticeable
-   * in practice: a zone exists because the space inside it is thin, and just
-   * outside one the visitor is in open floor where the smoothstep is saturated
-   * at 1 either way, so there is no speed to jump.
-   */
-  falloffZones?: WalkFalloffZone[];
-  /**
-   * How far inside to place a camera that has to be brought in from outside —
-   * the opening shot, or the return from a hero close-up, both of which are
-   * authored outside the region by design. METRES. Landing exactly on the
-   * boundary (d = 0) would drop the visitor somewhere fully damped.
-   */
-  spawnMargin?: number;
-}
+import type { WalkRegion } from './types';
 
 const smoothstep = (edge: number, x: number): number => {
   if (edge <= 0) return x > 0 ? 1 : 0;

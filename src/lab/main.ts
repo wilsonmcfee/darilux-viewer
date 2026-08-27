@@ -27,7 +27,8 @@ import {
 } from 'playcanvas';
 import './lab.css';
 
-import { DEMOS, type Demo } from '../demos';
+import { DEMOS } from '../demos';
+import type { Demo } from '../types';
 import { createDevice } from '../device';
 import { OrbitFlyCamera } from '../camera';
 import { RevealDriver, prefersReducedMotion } from '../reveal/driver';
