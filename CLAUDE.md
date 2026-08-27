@@ -54,11 +54,25 @@ any number in a `walk` block or `scene.json`.
 
 Everything the viewer shows — scene files, camera framing, copy, hero-point
 positions, walk regions, the brand block — is declared in `src/demos.ts` as
-data. Engine files (`main.ts`, `camera.ts`, `heropoints.ts`, `ui.ts`, …) are
-scene-agnostic and must stay free of client names; brand strings flow through
-`src/brand.ts` (`setBrand()` at boot, `logTag()`/`brandName()` everywhere
-else). If a client need can't be expressed as data in the config, extend the
-types — never branch on a client.
+data; the shared interfaces live in `src/types.ts`, which is where engine
+files import them from (never from demos.ts). Engine files are scene-agnostic
+and must stay free of client names; brand strings flow through
+`src/core/brand.ts`. If a client need can't be expressed as data in the
+config, extend the types — never branch on a client.
+
+The layout: `src/index.ts` is the public API (`createViewer({ mount, scenes,
+brand, onEnter, onHeroOpen })` → `{ load, goToHero, destroy }`); the pages
+boot through `src/site-entry.ts`, which exposes the handle as `__viewer`.
+Engine code sits in `core/` (main, camera + flyto + orbit, sceneloader,
+device, stage, knobs, splatquality, splatpick, brand, authoring), `nav/`
+(walk, locomotion, joystick, heropoints), `ui/` (ui, phonedock, perfhud,
+disclaimer) and `styles/` (five sheets imported by styles/index.css, in an
+order that same-specificity ties depend on). Client page styling lives in
+`sites/<client>/brand.css`, linked from each page's head.
+
+The `?author` rig (`core/authoring.ts`, incl. `__logPose`) is build-gated:
+present in dev, tree-shaken out of `npm run build` unless
+`VITE_AUTHORING=1` is set.
 
 New scenes start from `src/demo-template.ts` (type-checked, never imported, so
 it ships nothing and cannot rot) and follow `TEMPLATE.md` step by step.
