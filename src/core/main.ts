@@ -20,24 +20,22 @@
 import {
   Application,
   Entity,
-  Asset,
   Color,
-  Vec3,
   CameraFrame,
   TONEMAP_NONE,
   FILLMODE_NONE,
   RESOLUTION_AUTO,
-  type BoundingBox,
 } from 'playcanvas';
 import '../styles/index.css';
 
 import { BRAND, DEMOS } from '../demos';
-import type { Demo, HeroPoint, Pose } from '../types';
+import type { HeroPoint } from '../types';
 import { setBrand, logTag } from './brand';
 import { createDevice, canRender } from './device';
 import { OrbitFlyCamera } from './camera';
+import { SceneLoader } from './sceneloader';
+import type { AuthoringRig } from './authoring';
 import { HeroPointManager } from '../nav/heropoints';
-import { SplatPicker } from './splatpick';
 import { mountChrome } from './stage';
 import { TouchSticks, wantsTouchControls } from '../nav/joystick';
 import { PerfHud } from '../ui/perfhud';
@@ -55,6 +53,13 @@ import { UI } from '../ui/ui';
 // brand-flavoured copy. Module top-level so it precedes every boot path.
 setBrand(BRAND);
 
+/* Authoring is a TOOL, not a viewer feature, and it is gated at BUILD time as
+   well as at runtime: with this false, the dynamic import below is dead code,
+   so core/authoring.ts — and the SplatPicker it owns — tree-shake out of the
+   bundle and visitors stop downloading a rig they can never open. Dev keeps
+   it; VITE_AUTHORING=1 forces it into a production build that needs the rig. */
+const AUTHORING = import.meta.env.DEV || import.meta.env.VITE_AUTHORING === '1';
+
 function boot(): void {
   // The stage chrome is shared markup, injected rather than pasted into each
   // page (see stage.ts). This MUST run before anything resolves an id from it:
@@ -71,10 +76,9 @@ function boot(): void {
   const canvas = document.getElementById('viewer') as HTMLCanvasElement;
 
   // Authoring mode (?author / #author): crosshair, pose panel, splat-snap
-  // anchor picking. The picker decodes each scene's splat centers on the CPU —
-  // author-only cost, never paid by visitors.
+  // anchor picking — mounted from core/authoring.ts, build-gated by AUTHORING.
   const authorMode = /author/i.test(location.search + location.hash);
-  const picker = new SplatPicker();
+  let authoring: AuthoringRig | null = null;
 
   // ---- App state (the app itself is created lazily on first Enter) ---------
   let app: Application | null = null;
@@ -88,12 +92,6 @@ function boot(): void {
   const perf = new PerfHud(stage);
   let quality: SplatQualityControl | null = null;
 
-  let activeDemo: Demo | null = null;
-  let currentSplat: Entity | null = null;
-  let currentAsset: Asset | null = null;
-  let homePose: Pose | null = null; // the opening framing to return to on "Exit close-up"
-  let pendingFrame = false; // true while we wait for a scene's bounds to auto-frame it
-  let pendingHero: HeroPoint | null = null; // fly here once the scene finishes loading
   let closeupHero: HeroPoint | null = null; // hero currently being viewed up close
   let stickOverride: boolean | null = null; // __sticks(0/1); null = decide by device
   /* Fraction of the frame height a hero close-up lifts its subject on the mobile
@@ -172,12 +170,12 @@ function boot(): void {
        tap, the help card cannot be raised over a gear card at all. */
     if (phoneDock) {
       phoneDock.dataset.state =
-        activeDemo === null ? 'poster' : closeupHero !== null ? 'hero' : 'roam';
+        loader.activeDemo === null ? 'poster' : closeupHero !== null ? 'hero' : 'roam';
     }
 
     if (!sticks) return;
     const want =
-      activeDemo !== null &&
+      loader.activeDemo !== null &&
       (stickOverride ?? wantsTouchControls()) &&
       (controller?.walkActive ?? false) &&
       closeupHero === null;
@@ -221,6 +219,30 @@ function boot(): void {
     // Persists across scene loads — HeroPointManager keeps it separate from the
     // load gate, so streaming a new splat cannot switch the points back on.
     onTogglePoints: (on) => heroes?.setPointsEnabled(on),
+  });
+
+  /* The scene lifecycle — load/swap/fade, one splat at a time — lives in
+     sceneloader.ts. Everything it needs from this page comes through here, so
+     the loader owns the scene and main.ts keeps the page. */
+  const loader = new SceneLoader({
+    app: () => app!,
+    controller: () => controller!,
+    heroes: () => heroes!,
+    ui,
+    perf,
+    authorMode,
+    renderContinuously: () => {
+      if (app) app.autoRender = true;
+      armIn = 0;
+    },
+    armOnDemand: () => {
+      if (onDemand) armIn = ARM_FRAMES;
+    },
+    wake,
+    refreshSticks: () => refreshSticks(),
+    exitCloseupUI: () => exitCloseupUI(),
+    flyToHero: (hero) => flyToHero(hero),
+    onSceneUrl: (url) => authoring?.onSceneUrl(url),
   });
 
   /* ---- Re-decide the touch layout when the CONDITION changes, not when a
@@ -414,9 +436,6 @@ function boot(): void {
     // standing height without dropping ?author.
     controller.setWalkEnabled(!authorMode);
 
-    // Expose the pose/anchor authoring helpers for the browser console.
-    (window as unknown as { __logPose: () => void }).__logPose = () => controller!.logPose();
-    (window as unknown as { __logAnchor: () => void }).__logAnchor = () => controller!.logAnchor();
     // Walk-mode knobs. __eyeHeight() is the one to reach for: the 1.55 m in
     // demos.ts is a reasoned choice, not a measured fact, and it should be
     // settled against real WebGPU frames rather than argued about on paper.
@@ -516,118 +535,20 @@ function boot(): void {
       return quality.report();
     };
 
-    // Authoring aid: add ?author (or #author) to the URL for authoring mode —
-    // a center crosshair plus an on-screen panel with a live pose readout and
-    // Copy pose / Copy anchor buttons (no console needed; works on touch).
-    // The console helpers (__logPose / __logAnchor) still work as a fallback.
-    if (authorMode) {
-      const cross = document.createElement('div');
-      cross.id = 'author-crosshair';
-      stage.appendChild(cross);
-
-      const panel = document.createElement('div');
-      panel.id = 'author-panel';
-      panel.innerHTML =
-        `<div id="author-readout"></div>
-         <div class="author-btns">
-           <button type="button" id="author-copy-pose">Copy pose</button>
-           <button type="button" id="author-snap-anchor">Snap anchor</button>
-           <button type="button" id="author-copy-anchor">Free anchor</button>
-         </div>`;
-      stage.appendChild(panel);
-
-      // The last splat-snapped pick, shown as a live dot so you can verify it
-      // sticks to the surface while orbiting/zooming (no parallax slide).
-      let pickedWorld: Vec3 | null = null;
-      const pickedDot = document.createElement('div');
-      pickedDot.id = 'author-picked';
-      stage.appendChild(pickedDot);
-      const screenTmp = new Vec3();
-      app.on('update', () => {
-        if (!pickedWorld || !camera.camera) {
-          pickedDot.style.display = 'none';
-          return;
-        }
-        camera.camera.worldToScreen(pickedWorld, screenTmp);
-        pickedDot.style.display = screenTmp.z > 0 ? '' : 'none';
-        pickedDot.style.left = `${screenTmp.x}px`;
-        pickedDot.style.top = `${screenTmp.y}px`;
+    // The ?author rig — crosshair, pose panel, splat-snap anchor picking —
+    // lives in core/authoring.ts and only exists in builds where AUTHORING is
+    // true. The dynamic import is inside ensureApp on purpose: it resolves
+    // before the first loadDemo, so the picker never misses a scene URL.
+    if (AUTHORING && authorMode) {
+      const { mountAuthoring } = await import('./authoring');
+      authoring = mountAuthoring({
+        app,
+        camera,
+        canvas,
+        stage,
+        controller,
+        currentSplat: () => loader.currentSplat,
       });
-
-      const readout = panel.querySelector('#author-readout') as HTMLElement;
-      const fmt = (v: number[]) => `[${v.join(', ')}]`;
-      // Live readout — cheap, so just poll. getPose() is side-effect free.
-      window.setInterval(() => {
-        const p = controller!.getPose();
-        readout.textContent =
-          `pos ${fmt(p.position)}\ntgt ${fmt(p.target)}\nfov ${p.fov}`;
-      }, 150);
-
-      // Copy → clipboard when available (localhost/https), console otherwise.
-      const copy = async (snippet: string, btn: HTMLButtonElement) => {
-        let ok = true;
-        try {
-          await navigator.clipboard.writeText(snippet);
-        } catch {
-          ok = false;
-          console.log(logTag() + ' copy blocked — paste from here:\n' + snippet);
-        }
-        const original = btn.textContent;
-        btn.textContent = ok ? 'Copied ✓' : 'See console';
-        window.setTimeout(() => (btn.textContent = original), 1200);
-      };
-      panel.querySelector('#author-copy-pose')!.addEventListener('click', () => {
-        const p = controller!.getPose();
-        void copy(
-          `pose: { position: ${fmt(p.position)}, target: ${fmt(p.target)}, fov: ${p.fov} },`,
-          panel.querySelector('#author-copy-pose') as HTMLButtonElement,
-        );
-      });
-      panel.querySelector('#author-copy-anchor')!.addEventListener('click', () => {
-        // "Free anchor": the raw orbit target (screen-center, but at the orbit
-        // pivot's depth — may float off the surface). Prefer Snap anchor.
-        const p = controller!.getPose();
-        void copy(
-          `anchor: ${fmt(p.target)},`,
-          panel.querySelector('#author-copy-anchor') as HTMLButtonElement,
-        );
-      });
-
-      // ---- Splat-snapped anchor picking ------------------------------------
-      // Casts a ray and snaps to the nearest actual splat center, so the
-      // anchor sits ON the captured surface. A dot authored this way cannot
-      // parallax-slide across the gear when the visitor zooms or orbits.
-      const PICK_PX = 8; // screen-space pick tolerance
-      const snapBtn = panel.querySelector('#author-snap-anchor') as HTMLButtonElement;
-      const pickAt = (cssX: number, cssY: number): void => {
-        const cc = camera.camera;
-        if (!cc || !currentSplat) return;
-        if (!picker.ready) {
-          snapBtn.textContent = 'Decoding…';
-          window.setTimeout(() => (snapBtn.textContent = 'Snap anchor'), 1200);
-          return;
-        }
-        const far = cc.screenToWorld(cssX, cssY, cc.farClip);
-        const origin = camera.getPosition();
-        const dir = new Vec3().sub2(far, origin).normalize();
-        const tanRadius =
-          Math.tan((cc.fov * Math.PI) / 360) * ((2 * PICK_PX) / Math.max(canvas.clientHeight, 1));
-        const hit = picker.pick(origin, dir, tanRadius, currentSplat.getWorldTransform());
-        if (!hit) return;
-        pickedWorld = new Vec3(hit[0], hit[1], hit[2]);
-        void copy(`anchor: [${hit.join(', ')}],`, snapBtn);
-      };
-      // Button: pick whatever is under the center crosshair.
-      snapBtn.addEventListener('click', () =>
-        pickAt(canvas.clientWidth / 2, canvas.clientHeight / 2),
-      );
-      // Double-click / double-tap: pick under the cursor (doesn't fight orbit-drag).
-      canvas.addEventListener('dblclick', (e) => {
-        const rect = canvas.getBoundingClientRect();
-        pickAt(e.clientX - rect.left, e.clientY - rect.top);
-      });
-
-      console.info(logTag() + ' authoring mode — Copy pose for framings; Snap anchor (or double-click) pins to the splat surface');
     }
 
     /* ---- On-demand rendering -----------------------------------------------
@@ -687,20 +608,7 @@ function boot(): void {
     // ---- Frame loop ----------------------------------------------------------
     app.on('update', (dt: number) => {
       // Auto-frame a bounds-only scene as soon as its bounding box is available.
-      if (pendingFrame && currentSplat) {
-        const bb =
-          currentSplat.gsplat?.customAabb ??
-          (currentAsset?.resource as { aabb?: BoundingBox } | null)?.aabb ??
-          null;
-        if (bb) {
-          app!.root.syncHierarchy(); // ensure the 180° roll is baked into the world transform
-          const center = new Vec3();
-          currentSplat.getWorldTransform().transformPoint(bb.center, center);
-          controller!.frameBounds(center, bb.halfExtents.length());
-          homePose = controller!.getPose();
-          pendingFrame = false;
-        }
-      }
+      loader.tryAutoFrame();
       controller!.update(dt);
 
       /* Off `update`, not `frameend`, so the readout keeps refreshing on frames
@@ -789,7 +697,7 @@ function boot(): void {
       console.error(`${logTag()} unknown demo "${demoId}"`);
       return;
     }
-    if (activeDemo?.id === demoId) return;
+    if (loader.activeDemo?.id === demoId) return;
 
     // Move the stage into the chosen window FIRST (its poster hides via `.live`)
     // so the canvas has a real size when the graphics device is created.
@@ -806,17 +714,17 @@ function boot(): void {
     app!.autoRender = true; // wake the renderer (paused while no viewer is live)
     app!.resizeCanvas(stage.clientWidth, stage.clientHeight);
 
-    await loadDemo(demo);
+    await loader.load(demo);
   }
 
   // The × on the stage: unload the scene (frees GPU + JS memory) and give the
   // window its poster back. The engine stays warm for the next Enter.
   function exitViewer(): void {
-    if (!activeDemo) return;
+    if (!loader.activeDemo) return;
     exitCloseupUI();
-    unloadScene();
-    activeDemo = null;
-    pendingHero = null;
+    loader.unload();
+    loader.activeDemo = null;
+    loader.pendingHero = null;
     // After activeDemo is cleared, so the "a scene is live" clause fails and the
     // pads come down with the scene rather than being left over a poster.
     refreshSticks();
@@ -836,8 +744,8 @@ function boot(): void {
   function selectHero(hero: HeroPoint): void {
     const owner = DEMOS.find((d) => d.heroPoints.includes(hero));
     if (!owner) return;
-    if (activeDemo?.id !== owner.id) {
-      pendingHero = hero;
+    if (loader.activeDemo?.id !== owner.id) {
+      loader.pendingHero = hero;
       void enterViewer(owner.id);
       return;
     }
@@ -947,12 +855,12 @@ function boot(): void {
     // called BEFORE the card animates in, so the swap looks like one movement.
     refreshSticks();
     // Card style is per-demo: HUD panel, or a callout pinned to the 3D point.
-    const cardStyle = activeDemo?.cardStyle;
+    const cardStyle = loader.activeDemo?.cardStyle;
     if (cardStyle === 'anchored') {
       ui.showAnchoredCard(hero);
       heroes!.setActiveAnchor(hero.anchor ?? hero.pose.target);
     } else {
-      ui.showHeroCard(hero, cardStyle === 'hud-bottom' ? 'bottom' : 'left', activeDemo?.id);
+      ui.showHeroCard(hero, cardStyle === 'hud-bottom' ? 'bottom' : 'left', loader.activeDemo?.id);
     }
   }
 
@@ -961,7 +869,7 @@ function boot(): void {
     if (!controller) return;
     controller.exitHero();
     exitCloseupUI();
-    if (homePose) controller.flyTo(homePose, 1.3);
+    if (loader.homePose) controller.flyTo(loader.homePose, 1.3);
   }
 
   function exitCloseupUI(): void {
@@ -975,187 +883,6 @@ function boot(): void {
     refreshSticks();
   }
 
-  // ---- Scene loader: one splat at a time, with a soft fade -------------------
-  function unloadScene(): void {
-    if (currentSplat) {
-      currentSplat.destroy();
-      currentSplat = null;
-    }
-    if (currentAsset && app) {
-      app.assets.remove(currentAsset);
-      currentAsset.unload();
-      currentAsset = null;
-    }
-  }
-
-  async function loadDemo(demo: Demo): Promise<void> {
-    activeDemo = demo;
-
-    /* Render continuously for the whole load. The splat streams in, bakes and
-       sorts over many frames, and none of that moves the camera — so under
-       on-demand rendering the visitor would watch a frozen loading veil over a
-       black canvas. Re-armed when the scene lands. SuperSplat does exactly
-       this: autoRender true while loading, false once ready. */
-    if (app) app.autoRender = true;
-    armIn = 0;
-
-    // Poses are authored at this demo's desktop window aspect; the camera
-    // compensates fov whenever the live viewport is narrower (see camera.ts).
-    controller!.setReferenceAspect(demo.refAspect ?? 16 / 9);
-    // Height-locked movement, for the demos that declare a floor and a scale.
-    // Explicitly null for the others, so swapping scenes can never leave the
-    // previous demo's walk plane installed under the new one.
-    controller!.setWalk(demo.walk ?? null);
-
-    exitCloseupUI();
-    // Both guides go in; ui.ts picks between them when the card is rendered, so
-    // the copy still matches the device if the phone is rotated meanwhile.
-    ui.setGuide(demo.guide ?? null, demo.guideTouch ?? null);
-    ui.showLoading(`Loading ${demo.title}…`);
-    heroes!.setVisible(false);
-    pendingFrame = false; // cancel any auto-frame still pending from a prior scene
-
-    // Tear down the previous scene so only one splat is ever in memory.
-    unloadScene();
-
-    /* ---- Pick the bundle ---------------------------------------------------
-       THE DEFAULT FLIPPED 2026-08-25: phones now get the FULL scene.
-
-       The reduced `srcMobile` bundle (1.2M gaussians against 2.53M) was built
-       on the reasoning that splat count is the one mobile cost no renderer
-       setting can reduce, which is true. What was missing was a control: the
-       SAME 2.53M asset is what SuperSplat's viewer serves from the same file,
-       on the same phone, without lagging — so 2.53M is demonstrably survivable
-       and the reduction was never the thing standing between this viewer and a
-       smooth frame. Half the gaussians was simply the third of three
-       simultaneous quality cuts, and the picture that came back was judged too
-       soft and too aggressively culled. The other two are undone in device.ts
-       and splatquality.ts; this is the third.
-
-       The bundle is NOT deleted, and neither is the pipeline that builds it.
-       Splat count is still the only lever that touches the depth sort, so if
-       `?stats` shows the sort running longer than a frame on a real device —
-       the failure mode where the picture SWIMS rather than merely running
-       slow — this is the switch to reach for. It is one URL parameter away:
-
-         ?lite=1   the 1.2M bundle, i.e. what shipped before this change
-         ?full=1   the 2.53M bundle explicitly (now also the default)
-
-       Authoring mode still forces the full asset unconditionally: a hero pose
-       judged against a decimated cloud is a pose judged against a picture no
-       visitor will ever see, and __logPose() output has to stay valid for it. */
-    const flags = window.location.search + window.location.hash;
-    const useMobile =
-      !authorMode &&
-      !!demo.srcMobile &&
-      /(^|[?&#])lite(=1|[&#]|$)/i.test(flags) &&
-      !/(^|[?&#])full(=1|[&#]|$)/i.test(flags);
-    const src = useMobile ? demo.srcMobile! : demo.src;
-
-    // Host-agnostic: a demo's `src` may be a local path (bundled in public/splat/
-    // and served from GitHub/Cloudflare Pages) OR a full URL (e.g. a large scene
-    // served from Cloudflare R2 or any CDN). Absolute URLs are used as-is; local
-    // paths resolve against the Vite base so they work under /<repo>/ on Pages.
-    const isAbsolute = /^https?:\/\//i.test(src);
-    const url = isAbsolute ? src : `${import.meta.env.BASE_URL}${src}`;
-    if (useMobile) console.info(`${logTag()} mobile bundle: ${src}`);
-    // Authoring: decode this scene's splat centers for snap-picking (CPU copy,
-    // author mode only — visitors never pay this cost).
-    if (authorMode) {
-      picker.load(url).catch((e) => console.warn(logTag() + ' splat pick data unavailable:', e));
-    }
-
-    // filename hints the loader which parser to use (SOGS bundle = meta.json).
-    const filename = url.split('/').pop() || 'meta.json';
-    const asset = new Asset(demo.id, 'gsplat', { url, filename });
-    currentAsset = asset;
-
-    asset.once('load', () => {
-      if (activeDemo !== demo) {
-        // Superseded mid-load (visitor already switched scenes). The decoded
-        // splat resource just landed in memory — free it, or every rapid
-        // scene switch strands ~half a million splats and the site crawls.
-        app!.assets.remove(asset);
-        asset.unload();
-        return;
-      }
-      const entity = new Entity(demo.id);
-      // SuperSplat / splat-transform exports are flipped; the starter corrects
-      // with a 180° roll. Without this the scene renders upside-down.
-      entity.setLocalEulerAngles(0, 0, 180);
-      entity.addComponent('gsplat', { asset });
-      app!.root.addChild(entity);
-      currentSplat = entity;
-
-      if (demo.initialPose) {
-        controller!.setPose(demo.initialPose);
-        homePose = controller!.getPose();
-      } else {
-        // No authored pose — auto-frame from the splat's bounds. Those bounds may
-        // not be ready on this exact tick, so we defer to the update loop, which
-        // retries until they exist (see app.on('update')). Framing before bounds
-        // are ready aims the camera at empty space.
-        pendingFrame = true;
-      }
-
-      /* Resident gaussian count, straight off the decoded resource rather than
-         from the meta.json this file never parses. Optional-chained through
-         `unknown` because `numSplats` is typed `any` on GSplatResourceBase and
-         the readout is diagnostic — a HUD that could throw during a scene load
-         would be worse than a HUD that prints 0.00M. */
-      perf.setSplatCount(
-        Number((asset.resource as { numSplats?: number } | null)?.numSplats ?? 0),
-      );
-
-      heroes!.setDemo(demo);
-      heroes!.setVisible(true);
-      ui.hideLoading();
-
-      // Pads in with the scene, not with the Enter tap: setWalk() has landed by
-      // now, so walkActive is finally truthful, and there is something to walk
-      // through. A pendingHero fly-in below immediately takes them away again.
-      refreshSticks();
-
-      /* Start the countdown to on-demand rendering. NOT a flip to false here:
-         `load` fires when the asset has decoded, which is several frames before
-         the work buffer is baked, the first depth sort has come back and (for a
-         bounds-framed scene) the camera has been aimed at all. Going to sleep
-         in that window is how this shows a black or half-sorted room. */
-      if (onDemand) armIn = ARM_FRAMES;
-      wake();
-
-      // A synth picked from the collection list while the window was dormant:
-      // now that the scene is in, complete the fly-in.
-      if (pendingHero && demo.heroPoints.includes(pendingHero)) {
-        const hero = pendingHero;
-        pendingHero = null;
-        flyToHero(hero);
-      }
-    });
-
-    asset.on('progress', (received: number, length: number) => {
-      if (activeDemo !== demo) return;
-      if (length > 0) {
-        const pct = Math.floor(Math.max(0, Math.min(1, received / length)) * 100);
-        ui.showLoading(`Loading ${demo.title}… ${pct}%`);
-      }
-    });
-
-    asset.once('error', (err: string) => {
-      if (activeDemo !== demo) {
-        app!.assets.remove(asset);
-        asset.unload();
-        return;
-      }
-      console.error(`${logTag()} failed to load ${url}:`, err);
-      ui.showLoading(
-        `Couldn't load ${demo.title}. Check public/${demo.src} exists — see README.`,
-      );
-    });
-
-    app!.assets.add(asset);
-    app!.assets.load(asset);
-  }
 }
 
 boot();

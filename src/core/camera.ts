@@ -15,7 +15,7 @@
    AUTHORING HELPER
    Call  __logPose()  in the browser console to print the current framing as a
    ready-to-paste Pose. This is how you author initialPose and hero-point poses
-   in demos.ts. (Registered on window in main.ts.)
+   in demos.ts. (Registered on window by authoring.ts — dev/authoring builds.)
    ========================================================================== */
 
 import { Entity, Vec3, math } from 'playcanvas';
@@ -216,9 +216,11 @@ export class OrbitFlyCamera {
     this.canvas = canvas;
     this.attachInput();
     this.apply();
+    // The __logPose() pose-capture hint moved to authoring.ts's mount log —
+    // the helper only exists in builds that carry the rig.
     console.info(
       logTag() + ' camera — drag: orbit · right-drag / Shift+wheel: pan · wheel: zoom · ' +
-        'WASD + Q/E: fly (Shift = faster) · run __logPose() to capture a pose',
+        'WASD + Q/E: fly (Shift = faster)',
     );
   }
 
