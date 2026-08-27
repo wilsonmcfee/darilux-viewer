@@ -1,0 +1,359 @@
+/* ============================================================================
+   cards.css — description cards and modals
+   ----------------------------------------------------------------------------
+   The hero description card (HUD, bottom and anchored variants), per-demo
+   desktop tuning, and the page-level modals (disclaimer / unsupported).
+   Split out of the original src/style.css (see docs/RESTYLE_HANDOFF.md for the
+   JS couplings). Cascade note: engine sheets load in the order stage, controls,
+   markers, cards, veil — the same relative order the rules had in the single
+   file, which same-specificity ties depend on.
+   ========================================================================== */
+/* ---- Hero-point description card (inside the window) ----------------------- */
+#hero-card {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%) translateX(-18px);
+  z-index: 28;
+  width: min(340px, calc(100% - 36px));
+  max-height: calc(100% - 36px);
+  /* Scrolling lives on #hero-card-body, NOT here. overflow-y:auto on the card
+     would clip the prev/next buttons, which are positioned outside its box —
+     one axis of overflow being non-visible forces the other to clip too. */
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--shell-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px 26px;
+  color: var(--shell-ink);
+  opacity: 0;
+  transition: opacity 0.4s var(--ease), transform 0.4s var(--ease);
+  /* An opacity-0 element is still fully hit-testable, and hideHeroCard() defers
+     `.hidden` by 400ms so the fade can finish. main.ts re-shows the thumb pads
+     immediately on the same tap, so for those 400ms an invisible card sat over
+     them: close a gear close-up, reach straight for the walk stick, and the top
+     of both pads was dead. #hero-card is z-index 28 against #touch-controls'
+     26, so the card won. Resting state takes no input; `.open` takes it back. */
+  pointer-events: none;
+}
+#hero-card.open {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+  pointer-events: auto;
+}
+/* min-height:0 lets a flex item actually shrink, which is what makes it scroll
+   inside the card's max-height instead of pushing the card taller. */
+#hero-card-body { overflow-y: auto; min-height: 0; }
+
+/* Prev / next stepper — sits OUTSIDE the card, vertically centred, so it costs
+   the copy no width at all. `.has-nav` is kept as a styling hook (ui.ts toggles
+   it) and is used only at the mobile breakpoint, where the card is nearly full
+   width and the buttons have to come back inside. Both buttons are hidden
+   entirely when the demo has a single hero point.
+   Lower alpha than the card because these now float over the live 3D scene
+   rather than over the card's glass; the blur keeps them legible against a
+   bright splat. */
+.hero-card-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0 0 2px;
+  border: 1px solid var(--shell-line);
+  border-radius: 50%;
+  background: rgba(20, 16, 12, 0.425); /* 15% more transparent than the card's 0.5 */
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  color: var(--shell-ink-muted);
+  font-family: var(--serif);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.3s var(--ease), border-color 0.3s var(--ease),
+    background 0.3s var(--ease);
+}
+.hero-card-nav.prev { left: -42px; }
+.hero-card-nav.next { right: -42px; }
+.hero-card-nav:hover {
+  color: var(--shell-ink);
+  border-color: rgba(242, 237, 229, 0.5);
+  background: rgba(20, 16, 12, 0.663);
+}
+
+.hero-card-title {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 23px;
+  letter-spacing: -0.01em;
+  line-height: 1.12;
+  margin: 0 30px 4px 0; /* room for the × */
+}
+.hero-card-icon { display: inline-flex; vertical-align: -3px; margin-right: 9px; color: var(--accent); }
+.hero-card-sub {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--shell-ink-muted);
+  margin-bottom: 12px;
+}
+.hero-card-desc {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--shell-ink-muted);
+  margin: 8px 0 14px;
+}
+.hero-card-desc.hero-card-placeholder { opacity: 0.6; font-style: italic; }
+.hero-card-specs { margin: 0; display: grid; gap: 8px; }
+.hero-card-specs > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--shell-line);
+}
+.hero-card-specs dt { color: var(--shell-ink-muted); font-size: 13.5px; }
+.hero-card-specs dd { color: var(--shell-ink); font-size: 13.5px; text-align: right; }
+
+/* Bottom-center variant (synths + Studio E). */
+#hero-card.bottom {
+  left: 50%;
+  top: auto;
+  bottom: 18px;
+  width: min(520px, calc(100% - 180px)); /* 180px leaves room for the outside arrows */
+  max-height: 60%;
+  transform: translateX(-50%) translateY(24px);
+}
+#hero-card.bottom.open { transform: translateX(-50%) translateY(0); }
+
+/* ---- Per-demo card tuning — DESKTOP ONLY, and the media query is the fix ----
+   These rules used to sit unqualified, and that was a live bug rather than an
+   untidiness. `#hero-card.bottom[data-demo="bluedio"]` scores one id + one class
+   + one attribute; the mobile override below it is `#hero-card.bottom`, one id +
+   one class. A media query adds NOTHING to specificity, so the desktop width won
+   on phones too — and `width: min(620px, 100% - 180px)` on a 375px stage resolves
+   to 195px. With `left: 10px` also applying and `right: 10px` beaten by the
+   explicit width, the card became a 195px column welded to the left edge of the
+   frame, which is exactly how it looked.
+
+   Scoping them to the desktop breakpoint fixes it at the root instead of by
+   escalating specificity: the mobile block below now owns the card outright, and
+   a future per-demo rule cannot re-break it by being written more specifically.
+
+   `body:not(.phone)` ADDED 2026-08-26, and it is the same lesson a second time.
+   The width breakpoint alone is not "desktop": a phone in LANDSCAPE is 844-932
+   CSS px wide and matches it. The docked layout beats the GEOMETRY half of this
+   block on specificity — `body.phone #phone-dock #hero-card.bottom` (2 ids,
+   2 classes) outranks `#hero-card.bottom[data-demo]` (1 id, 2) — but the four
+   DESCENDANT rules below had no docked counterpart at all, so they applied
+   unopposed. Rotating the phone silently swapped the card to desktop
+   typography: 21px titles and 14px body sized for a 620px-wide card, dropped
+   into the 294x180 scroll box that is the smallest the docked card ever gets.
+   More scrolling, in the orientation with the least room.
+
+   Scoping by page as well as by width is what makes the docked card
+   typographically identical at every viewport width — which is what a
+   fixed-shape phone column should be.
+   ------------------------------------------------------------------------- */
+@media (min-width: 821px) {
+  /* Every rule in this block is a PER-DEMO desktop refinement. `body:not(.phone)`
+     belongs on each of them, not on the media query, because a media query
+     cannot carry a selector — see the specificity note above. */
+  /* Studio E's card: 20% wider and thinner — a low landscape strip. */
+  body:not(.phone) #hero-card.bottom[data-demo="studio-e"] {
+    width: min(624px, calc(100% - 180px));
+    max-height: 46%;
+    padding: 18px 26px;
+  }
+
+  /* Bluedio's cards carry a real paragraph on every hero, where the other demos
+     mostly carry a line or two. Rather than let the card grow tall, it grows WIDE:
+     more characters per line is fewer lines, at no cost to legibility. Padding and
+     leading are tightened a little; the body stays at 14px, only 0.5px under the
+     shared size. (On a phone the opposite trade is forced — see the mobile block.) */
+  body:not(.phone) #hero-card.bottom[data-demo="bluedio"] {
+    width: min(620px, calc(100% - 180px));
+    max-height: 52%;
+    padding: 18px 24px;
+  }
+  body:not(.phone) #hero-card.bottom[data-demo="bluedio"] .hero-card-title {
+    font-size: 21px; /* the longest title still sets on one line at this width */
+    margin-bottom: 3px;
+  }
+  body:not(.phone) #hero-card.bottom[data-demo="bluedio"] .hero-card-sub { margin-bottom: 7px; }
+  body:not(.phone) #hero-card.bottom[data-demo="bluedio"] .hero-card-desc {
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 5px 0 1px;
+  }
+}
+
+/* Links inside hero descriptions (e.g. the capture-quality example scene). */
+.hero-card-link {
+  color: #e08a3c;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.hero-card-link:hover { color: #f0a45e; }
+
+/* ---- Anchored hero card (pinned to the 3D point, tracks the camera) -------- */
+#hero-card-anchored {
+  position: absolute;
+  z-index: 22;
+  width: min(218px, calc(100% - 32px)); /* never wider than the window allows */
+  max-height: 60%;
+  overflow-y: auto;
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--shell-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 15px 17px;
+  color: var(--shell-ink);
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.3s var(--ease);
+}
+#hero-card-anchored.show { opacity: 1; }
+/* little tail pointing up toward the dot (the card rests beneath it) */
+#hero-card-anchored::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-bottom-color: var(--shell-line);
+}
+#hero-card-anchored .hero-card-title { font-size: 16px; margin-right: 24px; }
+#hero-card-anchored .hero-card-desc { font-size: 12px; }
+
+/* ---- Modals (disclaimer + unsupported) — page-level, paper style ---------------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(23, 19, 15, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.modal-card {
+  position: relative;
+  max-width: 560px;
+  width: 100%;
+  max-height: 84vh;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 34px 36px;
+  color: var(--ink);
+}
+.modal-card h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 27px;
+  letter-spacing: -0.01em;
+  margin: 0 0 14px;
+}
+.modal-card h3 {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 20px 0 6px;
+  color: var(--accent);
+}
+.modal-card p,
+.modal-card li {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.modal-card strong { color: var(--ink); }
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-size: 26px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.55;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.modal-close:hover { opacity: 1; }
+
+/* The in-window cards' × inherits .modal-close; keep it visible on dark glass. */
+#hero-card .modal-close,
+#hero-card-anchored .modal-close { color: var(--shell-ink); }
+
+
+/* ---- Mobile ---------------------------------------------------------------------- */
+@media (max-width: 820px) {
+  /* ---- The hero card: centred, in the bottom third, arrows outside ---------
+     Was a full-bleed strip pinned to the bottom edge — the right call when the
+     frame was 4:3 and there was no height to spend. The portrait frame changes
+     the arithmetic completely: ~590px of height instead of ~250px, so the card
+     can be an object floating in the lower third rather than a bar welded to the
+     floor of the frame, and it can afford to be narrower than the frame, which
+     is what puts the arrows genuinely BESIDE it instead of tucked inside its own
+     padding.
+
+     `bottom: 58px` is not arbitrary — it clears the bottom-left controls row,
+     which is z-index 30 and would otherwise print the points toggle straight
+     through the card's left edge. That overlap existed in the old strip too. */
+  #hero-card,
+  #hero-card.bottom {
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: 58px;
+    /* 100px pays for a 36px arrow plus breathing room on each side. */
+    width: calc(100% - 100px);
+    max-width: 440px;
+    max-height: 46%;
+    padding: 15px 16px;
+    transform: translateX(-50%) translateY(24px);
+  }
+  #hero-card.open,
+  #hero-card.bottom.open { transform: translateX(-50%) translateY(0); }
+
+  /* Arrows OUTSIDE the card, which is what "either side" means and what the
+     narrower card buys. 36px rather than the desktop 30 — a thumb is not a
+     cursor — and -44px puts them ~8px inside the frame, clear of the
+     overflow:hidden edge that forced them inside on the old full-width strip.
+     The `.has-nav` side padding that paid for the tucked-in version is
+     deliberately NOT restated here: there is nothing overlapping the copy now. */
+  .hero-card-nav { width: 36px; height: 36px; font-size: 22px; }
+  .hero-card-nav.prev { left: -44px; }
+  .hero-card-nav.next { right: -44px; }
+
+  /* The longest label in the set — "Rupert Neve Designs Shelford Channel" — sets
+     to three lines at this width, which is why the title comes down a further
+     2px rather than staying at the 19px the wider strip could carry. */
+  .hero-card-title { font-size: 17px; }
+  .hero-card-desc { font-size: 13px; line-height: 1.5; margin: 6px 0 10px; }
+  .hero-card-specs { gap: 6px; }
+  .hero-card-specs dt,
+  .hero-card-specs dd { font-size: 12.5px; }
+  #hero-card-anchored { padding: 14px 16px; }
+  #hero-card-anchored .hero-card-title { font-size: 17px; }
+  #hero-card-anchored .hero-card-desc { font-size: 12.5px; }
+}

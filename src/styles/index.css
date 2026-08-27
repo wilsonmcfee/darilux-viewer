@@ -1,0 +1,16 @@
+/* ============================================================================
+   index.css — the engine stylesheet. The ONLY css a page needs to import.
+   ----------------------------------------------------------------------------
+   Import order is load-bearing: it preserves the relative rule order of the
+   original single stylesheet, which same-specificity ties depend on (e.g. the
+   touch neutralisation of .hero-card-nav:hover in controls.css sits BEFORE the
+   base :hover in cards.css, exactly as it did in the one file).
+
+   Client styling (page sections, brand colours) does NOT live here — each
+   site links its own brand.css from its HTML. See sites/<client>/brand.css.
+   ========================================================================== */
+@import './stage.css';
+@import './controls.css';
+@import './markers.css';
+@import './cards.css';
+@import './veil.css';

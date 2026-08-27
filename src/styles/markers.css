@@ -1,0 +1,82 @@
+/* ============================================================================
+   markers.css — hero-point markers
+   ----------------------------------------------------------------------------
+   The live 3D pins: dot, ping ring, info variant, hover caption.
+   Split out of the original src/style.css (see docs/RESTYLE_HANDOFF.md for the
+   JS couplings). Cascade note: engine sheets load in the order stage, controls,
+   markers, cards, veil — the same relative order the rules had in the single
+   file, which same-specificity ties depend on.
+   ========================================================================== */
+/* ---- Hero-point markers (live 3D pins, positioned each frame) -------------- */
+/* The marker box must be EXACTLY the dot. heropoints.ts writes the projected 3D
+   point to left/top and translate(-50%, -50%) centres THIS ELEMENT on it, so
+   anything else sharing the box pushes the dot off its anchor by half its width.
+   The caption used to be a flex sibling hidden with `opacity: 0` — which still
+   occupies its full nowrap width — putting every dot (captionWidth + 10) / 2 px
+   LEFT of the gear it labels: 38 px for "Juno 6", 153 px for "Rupert Neve
+   Designs Shelford Channel". That is invisible while strafing, because a fixed
+   pixel offset just rides along with the image, but it reads as drift while
+   dollying: the same pixel offset covers a growing PHYSICAL distance on the
+   object as you back away (K·Z/f). Hence "drifts on W/S, fine on A/D, worse
+   further out". Keep the caption out of flow. */
+.hero-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: pointer;
+  display: block;
+  transition: opacity 0.25s var(--ease);
+}
+.hero-dot {
+  display: block; /* no longer a flex item, so it must blockify itself */
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(242, 237, 229, 0.7);
+  background:
+    radial-gradient(circle at center, var(--accent) 0 3px, transparent 3.5px);
+  position: relative;
+}
+.hero-dot::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  animation: ping 2.6s ease-out infinite;
+}
+/* 'info' variant — a ?-circle, 20% larger, for notes about the capture itself. */
+.hero-dot-info {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 16, 12, 0.6); /* no center dot — the ? takes its place */
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--shell-ink);
+}
+.hero-marker .hero-caption {
+  position: absolute; /* out of flow — see the .hero-marker note above */
+  left: calc(100% + 10px);
+  top: 50%;
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(242, 237, 229, 0.85);
+  background: rgba(20, 16, 12, 0.55);
+  padding: 4px 9px;
+  border-radius: 3px;
+  border: 1px solid rgba(242, 237, 229, 0.14);
+  opacity: 0;
+  transform: translate(-4px, -50%);
+  transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
+}
+.hero-marker:hover .hero-caption { opacity: 1; transform: translate(0, -50%); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-dot::after { animation: none; }
+}

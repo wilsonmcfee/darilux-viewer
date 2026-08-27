@@ -1,0 +1,41 @@
+/* ============================================================================
+   veil.css — the loading veil
+   ----------------------------------------------------------------------------
+   The in-window loading state: veil, spinner, label.
+   Split out of the original src/style.css (see docs/RESTYLE_HANDOFF.md for the
+   JS couplings). Cascade note: engine sheets load in the order stage, controls,
+   markers, cards, veil — the same relative order the rules had in the single
+   file, which same-specificity ties depend on.
+   ========================================================================== */
+/* ---- Loading veil (inside the window) --------------------------------------- */
+#loading {
+  position: absolute;
+  inset: 0;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(20, 16, 12, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--shell-ink);
+  opacity: 1;
+  transition: opacity 0.45s var(--ease); /* soft cross-fade between scenes */
+}
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 2px solid rgba(242, 237, 229, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#loading-label {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 16px;
+}
+

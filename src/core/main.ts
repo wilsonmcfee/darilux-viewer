@@ -29,7 +29,7 @@ import {
   RESOLUTION_AUTO,
   type BoundingBox,
 } from 'playcanvas';
-import '../style.css';
+import '../styles/index.css';
 
 import { BRAND, DEMOS } from '../demos';
 import type { Demo, HeroPoint, Pose } from '../types';
