@@ -1,13 +1,13 @@
 /* ============================================================================
-   Darilux Studio × Just For The Record — editorial one-page demo
+   Viewer stylesheet — editorial one-page demo
    ----------------------------------------------------------------------------
-   The page reads as a JFTR editorial layout: warm paper ground, Fraunces
+   The page reads as an editorial layout: warm paper ground, Fraunces
    display serif + Inter UI sans, hairline rules, and a single red accent.
    The 3DGS viewers live INSIDE bespoke dark "windows" set into the page —
    each window shows a styled poster until entered, then hosts the shared
    #stage (canvas + overlays), which main.ts moves between windows.
 
-   JS couplings (see RESTYLE_HANDOFF.md): keep ids/classes and the state
+   JS couplings (see docs/RESTYLE_HANDOFF.md): keep ids/classes and the state
    classes .hidden/.open/.show/.bottom/.live, and keep the transition
    durations for #loading (.45s), #hero-card (.4s), #hero-card-anchored (.3s)
    in sync with the timeouts in ui.ts.

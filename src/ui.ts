@@ -10,7 +10,7 @@
    ========================================================================== */
 
 import type { Demo, DemoGuide, HeroPoint } from './demos';
-import { DISCLAIMER_HTML } from './disclaimer';
+import { disclaimerHtml } from './disclaimer';
 import { wantsTouchControls } from './joystick';
 
 interface UICallbacks {
@@ -384,7 +384,7 @@ export class UI {
 
   // ---- Disclaimer modal ------------------------------------------------------
   private wireDisclaimer(): void {
-    $('disclaimer-body').innerHTML = DISCLAIMER_HTML;
+    $('disclaimer-body').innerHTML = disclaimerHtml();
     const modal = $('disclaimer');
     const open = () => modal.classList.remove('hidden');
     const close = () => modal.classList.add('hidden');

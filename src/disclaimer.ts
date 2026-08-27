@@ -6,7 +6,9 @@
    Keep the two in sync.
    ========================================================================== */
 
-export const DISCLAIMER_HTML = `
+import { brandName } from './brand';
+
+export const disclaimerHtml = (): string => `
   <h2 id="disclaimer-title">About this demo</h2>
   <p>
     This is an early preview of what will be a custom, interactive 3D viewer of
@@ -52,6 +54,6 @@ export const DISCLAIMER_HTML = `
 
   <p style="margin-top:18px;opacity:0.8;">
     Shared in confidence with Just&nbsp;For&nbsp;The&nbsp;Record. Please don't
-    redistribute. — Darilux&nbsp;Studio
+    redistribute. — ${brandName().replace(/ /g, '&nbsp;')}
   </p>
 `;

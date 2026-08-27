@@ -31,7 +31,8 @@ import {
 } from 'playcanvas';
 import './style.css';
 
-import { DEMOS, type Demo, type HeroPoint, type Pose } from './demos';
+import { BRAND, DEMOS, type Demo, type HeroPoint, type Pose } from './demos';
+import { setBrand, logTag } from './brand';
 import { createDevice, canRender } from './device';
 import { OrbitFlyCamera } from './camera';
 import { HeroPointManager } from './heropoints';
@@ -48,6 +49,10 @@ import {
 } from './splatquality';
 import { mountPhoneDock } from './phonedock';
 import { UI } from './ui';
+
+// Hand the deployment's identity to the engine before anything logs or renders
+// brand-flavoured copy. Module top-level so it precedes every boot path.
+setBrand(BRAND);
 
 function boot(): void {
   // The stage chrome is shared markup, injected rather than pasted into each
@@ -304,7 +309,7 @@ function boot(): void {
     quality = new SplatQualityControl(app, renderer);
     const mobile = window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth <= 820;
     if (mobile) quality.apply(MOBILE_PRESET);
-    console.info(`[darilux] splat quality: ${quality.activePathNote}`);
+    console.info(`${logTag()} splat quality: ${quality.activePathNote}`);
     app.setCanvasFillMode(FILLMODE_NONE);
     app.setCanvasResolution(RESOLUTION_AUTO);
 
@@ -564,7 +569,7 @@ function boot(): void {
           await navigator.clipboard.writeText(snippet);
         } catch {
           ok = false;
-          console.log('[darilux] copy blocked — paste from here:\n' + snippet);
+          console.log(logTag() + ' copy blocked — paste from here:\n' + snippet);
         }
         const original = btn.textContent;
         btn.textContent = ok ? 'Copied ✓' : 'See console';
@@ -621,7 +626,7 @@ function boot(): void {
         pickAt(e.clientX - rect.left, e.clientY - rect.top);
       });
 
-      console.info('[darilux] authoring mode — Copy pose for framings; Snap anchor (or double-click) pins to the splat surface');
+      console.info(logTag() + ' authoring mode — Copy pose for framings; Snap anchor (or double-click) pins to the splat surface');
     }
 
     /* ---- On-demand rendering -----------------------------------------------
@@ -780,7 +785,7 @@ function boot(): void {
   async function enterViewer(demoId: string): Promise<void> {
     const demo = DEMOS.find((d) => d.id === demoId);
     if (!demo) {
-      console.error(`[darilux] unknown demo "${demoId}"`);
+      console.error(`${logTag()} unknown demo "${demoId}"`);
       return;
     }
     if (activeDemo?.id === demoId) return;
@@ -1052,11 +1057,11 @@ function boot(): void {
     // paths resolve against the Vite base so they work under /<repo>/ on Pages.
     const isAbsolute = /^https?:\/\//i.test(src);
     const url = isAbsolute ? src : `${import.meta.env.BASE_URL}${src}`;
-    if (useMobile) console.info(`[darilux] mobile bundle: ${src}`);
+    if (useMobile) console.info(`${logTag()} mobile bundle: ${src}`);
     // Authoring: decode this scene's splat centers for snap-picking (CPU copy,
     // author mode only — visitors never pay this cost).
     if (authorMode) {
-      picker.load(url).catch((e) => console.warn('[darilux] splat pick data unavailable:', e));
+      picker.load(url).catch((e) => console.warn(logTag() + ' splat pick data unavailable:', e));
     }
 
     // filename hints the loader which parser to use (SOGS bundle = meta.json).
@@ -1141,7 +1146,7 @@ function boot(): void {
         asset.unload();
         return;
       }
-      console.error(`[darilux] failed to load ${url}:`, err);
+      console.error(`${logTag()} failed to load ${url}:`, err);
       ui.showLoading(
         `Couldn't load ${demo.title}. Check public/${demo.src} exists — see README.`,
       );

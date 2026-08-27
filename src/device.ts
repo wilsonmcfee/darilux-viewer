@@ -21,6 +21,7 @@ import {
   DEVICETYPE_WEBGL2,
   type GraphicsDevice,
 } from 'playcanvas';
+import { logTag } from './brand';
 
 export interface DeviceResult {
   device: GraphicsDevice;
@@ -234,7 +235,7 @@ export async function createDevice(
   // The pixel ratio rides along: it is the number most likely to explain a frame
   // time, and ?stats puts the same figure on screen for a device with no console.
   console.info(
-    `[darilux] active renderer: ${renderer} · render pixel ratio ${device.maxPixelRatio} ` +
+    `${logTag()} active renderer: ${renderer} · render pixel ratio ${device.maxPixelRatio} ` +
       `(device reports ${window.devicePixelRatio})`,
   );
 

@@ -19,6 +19,7 @@
    ========================================================================== */
 
 import { Entity, Vec3, math } from 'playcanvas';
+import { logTag } from './brand';
 import type { Pose, WalkConfig } from './demos';
 import { WalkConstraint } from './walk';
 
@@ -276,7 +277,7 @@ export class OrbitFlyCamera {
     this.attachInput();
     this.apply();
     console.info(
-      '[darilux] camera — drag: orbit · right-drag / Shift+wheel: pan · wheel: zoom · ' +
+      logTag() + ' camera — drag: orbit · right-drag / Shift+wheel: pan · wheel: zoom · ' +
         'WASD + Q/E: fly (Shift = faster) · run __logPose() to capture a pose',
     );
   }
@@ -420,7 +421,7 @@ export class OrbitFlyCamera {
     this.armSettle();
     if (this.walkEnabled) {
       console.info(
-        `[darilux] walk mode — eye height ${this.walk!.eyeHeight} m (world y ${this.walkY.toFixed(2)}) · ` +
+        `${logTag()} walk mode — eye height ${this.walk!.eyeHeight} m (world y ${this.walkY.toFixed(2)}) · ` +
           'WASD to walk, Shift to hurry · no vertical freedom · wheel scrolls the page · ' +
           '__eyeHeight(m) to retune, __walk(0) for the free fly',
       );

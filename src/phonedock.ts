@@ -42,6 +42,8 @@
    ========================================================================== */
 
 /** Ids moved into the dock, in the order they should sit in it. */
+import { logTag } from './brand';
+
 const DOCKED_IDS = ['hero-card', 'info-card', 'touch-controls', 'stage-controls'] as const;
 
 /**
@@ -81,7 +83,7 @@ export function mountPhoneDock(): HTMLElement | null {
     // one of these later should degrade to "that control is not in the dock"
     // rather than to a blank page.
     if (!el) {
-      console.warn(`[darilux] phone dock: #${id} not found, leaving it where it is`);
+      console.warn(`${logTag()} phone dock: #${id} not found, leaving it where it is`);
       continue;
     }
     dock.appendChild(el);
@@ -131,7 +133,7 @@ function installWindowShapeKnob(): void {
   const raw = new URLSearchParams(window.location.search).get('win');
   const n = Number(raw);
   if (raw !== null && Number.isFinite(n) && n > 0) {
-    console.info(`[darilux] viewer window aspect: ${set(n)}`);
+    console.info(`${logTag()} viewer window aspect: ${set(n)}`);
   }
 
   (window as unknown as { __win: (n?: number) => string }).__win = (v) =>

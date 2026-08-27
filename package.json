@@ -1,9 +1,9 @@
 {
-  "name": "darilux-jftr-demo",
+  "name": "@darilux/viewer",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Darilux Studio — interactive 3D Gaussian splat demo reel for Just For The Record (three scenes: synths, Studio E, common room).",
+  "description": "Darilux Studio's 3D Gaussian splat viewer — a config-driven engine for interactive room captures (WebGPU with WebGL2 fallback, hero fly-ins, walk mode, touch controls), consumed by per-client sites.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

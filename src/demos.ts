@@ -24,6 +24,12 @@
    until authored against your real .sog scenes.
    ========================================================================== */
 
+/* ---- Brand -----------------------------------------------------------------
+   The deployment's identity — console log prefix and disclaimer signature.
+   Data, like everything else in this file; main.ts hands it to setBrand()
+   at boot so no engine file carries a client string. */
+export const BRAND = { name: 'Darilux Studio', tag: 'darilux' };
+
 export interface Pose {
   position: [number, number, number];
   target: [number, number, number];
