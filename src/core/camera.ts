@@ -750,6 +750,17 @@ export class OrbitFlyCamera {
     this.onUserInteract?.();
   }
 
+  /* iOS Safari swallows canvas gestures that Chrome delivers cleanly, and
+     `touch-action: none` alone has not closed it in the field: a pinch that
+     starts on the canvas can still zoom the PAGE (Safari's proprietary gesture
+     events run on their own channel), and a drag Safari decides to claim
+     arrives as an early `pointercancel` — onPointerUp drops the pointer and
+     the orbit dies after one frame, which from the outside reads as
+     "interaction is disabled". Preventing the raw touchmove and the gesture*
+     events on the CANVAS ONLY keeps Safari's hands off both, while cards and
+     the dock keep their native scrolling. */
+  private preventNativeGesture = (e: Event): void => e.preventDefault();
+
   private attachInput(): void {
     const c = this.canvas;
     c.addEventListener('pointerdown', this.onPointerDown, { passive: false });
@@ -757,6 +768,9 @@ export class OrbitFlyCamera {
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('pointercancel', this.onPointerUp);
     c.addEventListener('wheel', this.onWheel, { passive: false });
+    c.addEventListener('touchmove', this.preventNativeGesture, { passive: false });
+    c.addEventListener('gesturestart', this.preventNativeGesture);
+    c.addEventListener('gesturechange', this.preventNativeGesture);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onWindowBlur);
@@ -774,6 +788,9 @@ export class OrbitFlyCamera {
     window.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('pointercancel', this.onPointerUp);
     c.removeEventListener('wheel', this.onWheel);
+    c.removeEventListener('touchmove', this.preventNativeGesture);
+    c.removeEventListener('gesturestart', this.preventNativeGesture);
+    c.removeEventListener('gesturechange', this.preventNativeGesture);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onWindowBlur);
@@ -793,9 +810,13 @@ export class OrbitFlyCamera {
     this.pressedKeys.delete(e.code);
   };
 
-  // Dropping focus (Alt-Tab, clicking the console) must not leave keys "stuck".
+  // Dropping focus (Alt-Tab, clicking the console) must not leave keys "stuck" —
+  // nor pointers: a blur mid-gesture (iOS tab switch, incoming call) eats the
+  // pointerup, and a stale entry turns every later drag into a phantom pinch.
   private onWindowBlur = (): void => {
     this.pressedKeys.clear();
+    this.pointers.clear();
+    this.lastPinchDist = 0;
   };
 
   /** WASD + Q/E free-fly: translate the orbit target along the view basis. */
@@ -867,6 +888,19 @@ export class OrbitFlyCamera {
   }
 
   private onPointerDown = (e: PointerEvent): void => {
+    /* iOS Safari does not reliably deliver a pointerup/-cancel for EVERY finger
+       it retargets around a suppressed native gesture, and one stale entry in
+       this map is enough to break input for the rest of the session: a single
+       finger then counts as pointers.size >= 2, so every drag is misread as a
+       pinch between one live finger and one ghost — "works for a moment, then
+       stops responding", exactly as reported from the device. A pointerdown
+       flagged PRIMARY is by definition the first contact of a NEW interaction
+       (and every mouse event is primary), so anything still tracked at that
+       moment is a leak from the last one: drop it and start clean. */
+    if (e.isPrimary) {
+      this.pointers.clear();
+      this.lastPinchDist = 0;
+    }
     this.canvas.setPointerCapture?.(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.interrupt();

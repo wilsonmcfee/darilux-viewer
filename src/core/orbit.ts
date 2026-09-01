@@ -17,6 +17,21 @@ import { shortestAngle, type OrbitState } from './flyto';
 // Default auto-orbit feel (per-hero overrides can replace any of these).
 const DEFAULT_ORBIT = { speed: 7.5, ease: 6, amplitude: 30, yawLimit: 60 };
 
+/* Squishy travel past each end of the yaw arc, degrees.
+
+   A HARD clamp reads as broken input, and on a one-sided arc it literally is:
+   dj-sandman-theory's arc is [0, 40], the fly-in lands at offset 0 — the arc's
+   own edge — so a drag toward the excluded side produced exactly nothing, and
+   the on-device report (2026-08-31) was "some hero points don't respond at
+   all". The arc is still authored intent (it excludes the wall behind the
+   piece); this makes its edge feel like an elastic STOP rather than dead
+   input. The compression is exponential and asymptotic, so no amount of
+   dragging exceeds the arc edge by more than this, and the idle sway walks the
+   camera back inside the window afterwards. Stateless on purpose: the stored
+   yaw IS the compressed value, so releasing and re-dragging needs no spring
+   bookkeeping. */
+const SOFT_OVERSHOOT = 8;
+
 export interface HeroOrbitOpts {
   mode?: 'sway' | 'spin' | 'none';
   direction?: number;
@@ -105,11 +120,20 @@ export class HeroOrbit {
   /**
    * In close-up (sway mode only), clamp yaw to a front arc so the camera can't
    * swing behind the piece. Spin mode (central fixture) allows full 360° — the
-   * caller guards on `spin`.
+   * caller guards on `spin`. The edges are elastic, not hard — see
+   * SOFT_OVERSHOOT.
    */
   clampYaw(yaw: number): number {
-    const offset = math.clamp(shortestAngle(this.centerYaw, yaw), this.yawMin, this.yawMax);
-    return this.centerYaw + offset;
+    const offset = shortestAngle(this.centerYaw, yaw);
+    let held: number;
+    if (offset > this.yawMax) {
+      held = this.yawMax + SOFT_OVERSHOOT * (1 - Math.exp((this.yawMax - offset) / SOFT_OVERSHOOT));
+    } else if (offset < this.yawMin) {
+      held = this.yawMin - SOFT_OVERSHOOT * (1 - Math.exp((offset - this.yawMin) / SOFT_OVERSHOOT));
+    } else {
+      held = offset;
+    }
+    return this.centerYaw + held;
   }
 
   /**
