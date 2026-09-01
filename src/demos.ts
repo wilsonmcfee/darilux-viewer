@@ -226,13 +226,21 @@ export const DEMOS: Demo[] = [
       'A dense live room - drum kit, synth wall, DJ booth, red drapes. Ten hero ' +
       'points, each flying to a piece of gear you can orbit and read about.',
     src: 'splat/bluedio/meta.json', // SOGS bundle ("Bluedio_optimized.sog", 2,534,528 gaussians)
-    /* 1,200,000 gaussians / 18.0 MB, against the desktop bundle's 2,534,528 /
-       34.4 MB. Measured on the WebGL2 path, the depth sort drops from 20 ms to
-       8-10 ms — it is linear in the count, and that sort is what makes an older
-       phone feel laggy rather than merely soft. Visually it is very close: the
-       reduction MERGES neighbouring gaussians rather than deleting them, so
-       surfaces stay sealed. Verified by A/B against the full asset at the
-       opening pose and at a hero close-up.
+    /* 1,600,000 gaussians / 22.6 MB, against the desktop bundle's 2,534,528 /
+       34.4 MB. Measured on the WebGL2 path (?gl&stats, same machine, same
+       view): the depth sort drops from 19 ms to 11 ms — it is linear in the
+       count, and that sort is what makes an older phone feel laggy rather than
+       merely soft.
+
+       1.6M, NOT the 1.2M that shipped first: on the device (iOS 18.5, iPhone
+       16 Pro, 2026-08-31) the 1.2M bundle read as broken — invisible floor
+       panes, see-through desks. Flat surfaces reconstruct as mats of small
+       gaussians, and even merge-based decimation thins the mat past sealing at
+       a 53% cut. At 1.6M the mats hold: A/B'd against the full asset at the
+       opening pose, a floor zoom and a hero close-up, no visible difference
+       (matching the pipeline note that 1.6M is where the two become
+       indistinguishable). If a slower phone still swims at 1.6M, rebuild
+       smaller and re-judge the floor — do not go below it blind.
        Built by autoscene/mobile_asset.py + splat-transform; the exact commands
        and the reasoning behind each stage are in autoscene/RUNNING.md. */
     srcMobile: 'splat/bluedio-mobile/meta.json',
@@ -272,6 +280,7 @@ export const DEMOS: Demo[] = [
         { key: 'Left stick', action: 'Walk — push it the way you want to go' },
         { key: 'Right stick', action: 'Look around, as if turning your head' },
         { key: 'Tap a point', action: 'Fly in for a closer look' },
+        { key: 'In a close-up', action: 'Drag to move around the piece, pinch to zoom' },
         { key: 'Arrows', action: 'Step to the next piece of gear' },
         { key: 'Close ×', action: 'Leave a close-up and get the sticks back' },
         { key: 'Toggle', action: 'Show or hide the points' },
@@ -434,14 +443,16 @@ export const DEMOS: Demo[] = [
        need no conversion - that is the path to use.
        -------------------------------------------------------------------- */
 
-    // Opening shot from autoscene: the walk-region seat with the most saliency
-    // in frame, 0.316 m clear of the walk boundary. Raw .sog was
-    // position [-7.5497, 0, 2.1787] / target [-0.6553, 0.75, 7.9638], yaw 40.
-    // fov 42 matches the vertical FOV the CPU contact sheet was rendered at, so
-    // this frame is the one verified in autoscene/previews.png.
+    // Opening shot authored by Will with __logPose() (2026-08-31; the autoscene
+    // candidate it replaces started up in the wall). Captured at eye y 0.388,
+    // then the HEIGHT ALONE was snapped to the walk plane (floorY -4.2 +
+    // 1.55 m * 3 = +0.45) so the opening shot already stands at the height the
+    // visitor walks at — the settle has no descent to perform, only the usual
+    // slide into the region on the first step. x/z and the target are verbatim
+    // from the capture.
     initialPose: {
-      position: [10.473, 2.213, -3.39],
-      target: [3.111, -0.507, 1.079],
+      position: [10.593, 0.45, -2.589],
+      target: [2.657, -0.115, 1.693],
       fov: 42,
     },
 
