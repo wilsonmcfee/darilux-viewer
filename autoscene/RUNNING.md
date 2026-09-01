@@ -110,8 +110,17 @@ the count. Measured on the WebGL2 path with `?gl`:
 
 | bundle | gaussians | download | depth sort |
 |---|---|---|---|
-| `bluedio` (desktop) | 2,534,528 | 34.4 MB | 20 ms |
-| `bluedio-mobile` | 1,200,000 | 18.0 MB | 8–10 ms |
+| `bluedio` (desktop) | 2,534,528 | 34.4 MB | 19–20 ms |
+| `bluedio-mobile` | 1,600,000 | 22.6 MB | 11 ms |
+| (1.2M, retired) | 1,200,000 | 18.0 MB | 8–10 ms |
+
+The bundle was 1.2M first and was rebuilt at 1.6M on 2026-08-31: on the device
+(iPhone 16 Pro, iOS 18.5) the 1.2M version showed invisible floor panes and
+see-through desks — the surface-mat thinning this file already predicts under
+"significance pruning", arriving a little later on the merge path. 1.6M is the
+measured seal point ("visually indistinguishable from the full asset"), A/B
+verified at the opening pose, a floor zoom and a hero close-up. If a device
+still swims at 1.6M, rebuild smaller and re-judge the floor before shipping it.
 
 When a sort overruns a frame the depth order lands stale, and the picture
 *swims* rather than merely running slow. That is the failure this fixes, and
@@ -125,7 +134,9 @@ express; `splat-transform` does the decimation and the encode.
 
     UV="$LOCALAPPDATA/Microsoft/WinGet/Packages/astral-sh.uv_Microsoft.Winget.Source_8wekyb3d8bbwe/uv.exe"
     ST="npx -y @playcanvas/splat-transform@3.3.0"
-    SRC="../Bluedio Experience/Hi Def Bluedio.ply"
+    # Raw scans moved out of the old "Bluedio Experience" folder in the
+    # 2026-08 restructure; they live under C:\3dgs-assets now.
+    SRC="/c/3dgs-assets/training/bluedio/Hi Def Bluedio.ply"
 
     # 0. the reachable camera set, read from demos.ts so it cannot drift
     node --experimental-strip-types autoscene/reachable.mjs > autoscene/reachable.json
@@ -136,11 +147,12 @@ express; `splat-transform` does the decimation and the encode.
 
     # 2. adaptive decimation to the target count        (~30 s)
     $ST "$TEMP/bluedio_cut.ply" --filter-nan \
-        --decimate-adaptive 1200000 "$TEMP/bluedio_1v2m.ply"
+        --decimate-adaptive 1600000 "$TEMP/bluedio_1v6m.ply"
 
     # 3. encode to an unbundled SOGS directory          (~7 s)
+    #    (-w to overwrite an existing bundle in place)
     mkdir -p public/splat/bluedio-mobile
-    $ST "$TEMP/bluedio_1v2m.ply" --filter-nan --filter-harmonics 1 -m -i 3 \
+    $ST -w "$TEMP/bluedio_1v6m.ply" --filter-nan --filter-harmonics 1 -m -i 3 \
         --max-workers 8 public/splat/bluedio-mobile/meta.json
 
 Step 0 must be re-run whenever the walk region or the hero poses change — it

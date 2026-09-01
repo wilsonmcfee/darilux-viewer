@@ -35,6 +35,8 @@ export interface SceneLoaderDeps {
   flyToHero(hero: HeroPoint): void;
   /** Authoring rig's chance to decode the scene's centers (no-op in client builds). */
   onSceneUrl(url: string): void;
+  /** Which pipeline the device actually booted — decides the default bundle. */
+  renderer(): 'webgpu' | 'webgl2' | null;
 }
 
 export class SceneLoader {
@@ -119,36 +121,41 @@ export class SceneLoader {
     this.unload();
 
     /* ---- Pick the bundle ---------------------------------------------------
-       THE DEFAULT FLIPPED 2026-08-25: phones now get the FULL scene.
+       The default is decided BY RENDERER since 2026-08-31; before that it
+       flipped to full-for-everyone on 2026-08-25, and both moves were right
+       about the evidence they had.
 
-       The reduced `srcMobile` bundle (1.2M gaussians against 2.53M) was built
-       on the reasoning that splat count is the one mobile cost no renderer
-       setting can reduce, which is true. What was missing was a control: the
-       SAME 2.53M asset is what SuperSplat's viewer serves from the same file,
-       on the same phone, without lagging — so 2.53M is demonstrably survivable
-       and the reduction was never the thing standing between this viewer and a
-       smooth frame. Half the gaussians was simply the third of three
-       simultaneous quality cuts, and the picture that came back was judged too
-       soft and too aggressively culled. The other two are undone in device.ts
-       and splatquality.ts; this is the third.
+       The 08-25 flip reasoned from a control: SuperSplat serves the same 2.53M
+       asset smoothly, so the count cut was not what stood between this viewer
+       and a smooth frame — on the pipeline where the sort runs on the GPU.
+       What that control did not separate is the two pipelines. On WebGL2 the
+       depth sort is a CPU counting sort over EVERY gaussian on a worker, linear
+       in count, and no resolution or culling knob touches it (the two
+       strongest-sounding ones are WGSL-only — see splatquality.ts). iOS Safari
+       over Tailscale is exactly this path, and the lag Will reports there
+       (2026-08-31, ?stats reading webgl2) is the failure the 1.2M bundle was
+       built for.
 
-       The bundle is NOT deleted, and neither is the pipeline that builds it.
-       Splat count is still the only lever that touches the depth sort, so if
-       `?stats` shows the sort running longer than a frame on a real device —
-       the failure mode where the picture SWIMS rather than merely running
-       slow — this is the switch to reach for. It is one URL parameter away:
+       So the default now follows the sort:
 
-         ?lite=1   the 1.2M bundle, i.e. what shipped before this change
-         ?full=1   the 2.53M bundle explicitly (now also the default)
+         webgpu             full 2.53M — the GPU sort carries it, keep the look
+         webgl2 + touch     lite 1.2M — halves the one cost nothing else touches
+         webgl2 desktop     full — a desktop CPU absorbs the sort; also what ?gl
+                            is for (reproducing the slow path deliberately)
 
-       Authoring mode still forces the full asset unconditionally: a hero pose
-       judged against a decimated cloud is a pose judged against a picture no
-       visitor will ever see, and __logPose() output has to stay valid for it. */
+       `?lite=1` and `?full=1` still override in both directions, so every A/B
+       in the docs keeps working. Authoring mode still forces the full asset
+       unconditionally: a hero pose judged against a decimated cloud is a pose
+       judged against a picture no visitor will ever see, and __logPose() output
+       has to stay valid for it. */
     const flags = window.location.search + window.location.hash;
+    const touchDevice =
+      (window.matchMedia?.('(pointer: coarse)').matches ?? false) || window.innerWidth <= 820;
+    const liteByDefault = deps.renderer() === 'webgl2' && touchDevice;
     const useMobile =
       !deps.authorMode &&
       !!demo.srcMobile &&
-      /(^|[?&#])lite(=1|[&#]|$)/i.test(flags) &&
+      (liteByDefault || /(^|[?&#])lite(=1|[&#]|$)/i.test(flags)) &&
       !/(^|[?&#])full(=1|[&#]|$)/i.test(flags);
     const src = useMobile ? demo.srcMobile! : demo.src;
 

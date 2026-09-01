@@ -37,6 +37,14 @@ export interface KnobDeps {
 export function installKnobs(deps: KnobDeps): void {
   const { app, camera, controller, perf } = deps;
 
+  /* Dev-only: the raw Application, so the documented hidden-pane workflow
+     (TEMPLATE.md gotcha 13 — `app.update(1/60)` then `app.render()` when
+     document.hidden stops rAF) is actually reachable from a console or a
+     driver script. Gated at build time; production bundles never carry it. */
+  if (import.meta.env.DEV) {
+    (window as unknown as { __app: Application }).__app = app;
+  }
+
   /* ---- Sharpen A/B (authoring aid) -------------------------------------
      PlayCanvas ships AMD CAS (Contrast Adaptive Sharpening) in CameraFrame's
      compose pass. CAS sharpens low-contrast regions hard and backs off on

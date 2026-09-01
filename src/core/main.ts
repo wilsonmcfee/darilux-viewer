@@ -118,6 +118,9 @@ export function createViewer(opts: ViewerOptions): Viewer {
      look identical from outside, and the HUD is what separates them. */
   const perf = new PerfHud(stage);
   let quality: SplatQualityControl | null = null;
+  // Which pipeline actually booted; the loader's bundle default keys off it
+  // (webgl2's CPU sort is linear in splat count — see sceneloader.ts).
+  let rendererKind: 'webgpu' | 'webgl2' | null = null;
 
   let closeupHero: HeroPoint | null = null; // hero currently being viewed up close
   let stickOverride: boolean | null = null; // __sticks(0/1); null = decide by device
@@ -270,6 +273,7 @@ export function createViewer(opts: ViewerOptions): Viewer {
     exitCloseupUI: () => exitCloseupUI(),
     flyToHero: (hero) => flyToHero(hero),
     onSceneUrl: (url) => authoring?.onSceneUrl(url),
+    renderer: () => rendererKind,
   });
 
   /* ---- Re-decide the touch layout when the CONDITION changes, not when a
@@ -346,6 +350,7 @@ export function createViewer(opts: ViewerOptions): Viewer {
     const { device, renderer } = await createDevice(canvas, {
       perfScale: phoneDock ? 0.75 : 0.5,
     });
+    rendererKind = renderer;
 
     // The canvas is sized by its host window (CSS 100%), not the browser window:
     // FILLMODE_NONE + RESOLUTION_AUTO track the element's client size.
@@ -710,28 +715,26 @@ export function createViewer(opts: ViewerOptions): Viewer {
     const ao = hero.autoOrbit;
     const pivot = orbitPivot(hero);
     const direction = orbitDirection(ao);
-    /* ---- No idle motion on a phone ---------------------------------------
-       Auto-orbit is the reason a close-up on a phone never stops costing
-       anything, and a close-up is the state a visitor sits in LONGEST — it is
-       the reading state. With on-demand rendering (see the frame loop) a still
-       camera costs literally zero, so dropping the orbit is what converts the
-       longest state in the experience from "full splat fill at 60 fps" into
-       "free". That is the fix for the frame rate decaying over several minutes:
-       the decay was thermal, and a phone that never heats up never throttles.
+    /* ---- Idle motion runs on EVERY device, including phones ---------------
+       This reverses the 2026-08 perf pass, which forced mode 'none' on touch so
+       a close-up would go quiescent under on-demand rendering (a close-up is
+       the longest-dwelled state, and the frame-rate decay it was fighting was
+       thermal). The reversal is Will's call, made on the device: a perfectly
+       still close-up READS AS BROKEN — nothing announces that the piece can be
+       orbited, so visitors concluded interaction was disabled. The sway is the
+       affordance, not garnish.
 
-       Mode 'none' rather than skipping the options object entirely — the yaw
-       and pitch LIMITS come through the same path, and those are what keep a
-       close-up pointed at the gear instead of at the wall behind it.
-
-       Desktop keeps the orbit: it is plugged in, it is not thermally limited,
-       and the slow sway is a real part of how the close-ups read there. */
-    const stillCloseups = stickOverride ?? wantsTouchControls();
+       What the perf pass bought is not all given back: on-demand rendering
+       still idles the roam state, the poster, and every second the visitor is
+       actively reading a card mid-drag pause is unaffected — the cost returns
+       only while a close-up sways. If thermals resurface, dial the DURATION of
+       the sway rather than its existence. */
     controller!.flyToHero(
       hero.pose,
       1.6,
       ao
         ? {
-            mode: stillCloseups ? 'none' : ao.mode,
+            mode: ao.mode,
             direction,
             pivot,
             speed: ao.speed,
@@ -740,9 +743,7 @@ export function createViewer(opts: ViewerOptions): Viewer {
             yawLimit: ao.yawLimit,
             arc: ao.arc,
           }
-        : stillCloseups
-          ? { mode: 'none' }
-          : undefined,
+        : undefined,
       // Hide this hero's own dot on ARRIVAL, not on click: while the camera is
       // still flying the dot is the thing you are flying at, but once landed it
       // sits dead centre in front of the object it labels. Restored by
