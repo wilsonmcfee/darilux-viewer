@@ -35,8 +35,6 @@ export interface SceneLoaderDeps {
   flyToHero(hero: HeroPoint): void;
   /** Authoring rig's chance to decode the scene's centers (no-op in client builds). */
   onSceneUrl(url: string): void;
-  /** Which pipeline the device actually booted — decides the default bundle. */
-  renderer(): 'webgpu' | 'webgl2' | null;
 }
 
 export class SceneLoader {
@@ -121,41 +119,42 @@ export class SceneLoader {
     this.unload();
 
     /* ---- Pick the bundle ---------------------------------------------------
-       The default is decided BY RENDERER since 2026-08-31; before that it
-       flipped to full-for-everyone on 2026-08-25, and both moves were right
-       about the evidence they had.
+       Touch devices get the lite bundle; desktops get the full scene. The
+       default has now moved three times, and each move was right about the
+       evidence it had, so the lineage is worth keeping:
 
-       The 08-25 flip reasoned from a control: SuperSplat serves the same 2.53M
-       asset smoothly, so the count cut was not what stood between this viewer
-       and a smooth frame — on the pipeline where the sort runs on the GPU.
-       What that control did not separate is the two pipelines. On WebGL2 the
-       depth sort is a CPU counting sort over EVERY gaussian on a worker, linear
-       in count, and no resolution or culling knob touches it (the two
-       strongest-sounding ones are WGSL-only — see splatquality.ts). iOS Safari
-       over Tailscale is exactly this path, and the lag Will reports there
-       (2026-08-31, ?stats reading webgl2) is the failure the 1.2M bundle was
-       built for.
+       2026-08-25, full for everyone: SuperSplat serves the same 2.53M asset
+       smoothly, so count was not the bottleneck — true on the desktop it was
+       observed on.
 
-       So the default now follows the sort:
+       2026-08-31 (am), decided by renderer: on WebGL2 the depth sort is a CPU
+       counting sort over every gaussian, linear in count, untouched by any
+       resolution or culling knob — so webgl2 phones got lite and WebGPU kept
+       full, on the theory that the GPU sort carries it.
 
-         webgpu             full 2.53M — the GPU sort carries it, keep the look
-         webgl2 + touch     lite 1.2M — halves the one cost nothing else touches
-         webgl2 desktop     full — a desktop CPU absorbs the sort; also what ?gl
-                            is for (reproducing the slow path deliberately)
+       2026-08-31 (pm), decided by DEVICE, which is where it lands: an iPhone
+       16 Pro Max on iOS 26.5 (WebGPU) stuttered WORSE than the webgl2 phone —
+       but it was rendering 2.53M against the other phone's 1.6M, a confound
+       the renderer split itself created. Count is not only the sort: it is
+       fill, bandwidth and the SH bake on EVERY path, and on WebGPU the sort
+       shares the GPU with rendering, so extra count stretches the frame
+       directly (stutter) rather than lagging asynchronously (swim). A phone
+       is a phone; only a desktop has the headroom for the full asset by
+       default.
 
-       `?lite=1` and `?full=1` still override in both directions, so every A/B
-       in the docs keeps working. Authoring mode still forces the full asset
+       `?lite=1` and `?full=1` still override in both directions — ?full=1 on
+       the WebGPU phone is the honest A/B for whether its GPU can in fact
+       carry 2.53M. Authoring mode still forces the full asset
        unconditionally: a hero pose judged against a decimated cloud is a pose
-       judged against a picture no visitor will ever see, and __logPose() output
-       has to stay valid for it. */
+       judged against a picture no visitor will ever see, and __logPose()
+       output has to stay valid for it. */
     const flags = window.location.search + window.location.hash;
     const touchDevice =
       (window.matchMedia?.('(pointer: coarse)').matches ?? false) || window.innerWidth <= 820;
-    const liteByDefault = deps.renderer() === 'webgl2' && touchDevice;
     const useMobile =
       !deps.authorMode &&
       !!demo.srcMobile &&
-      (liteByDefault || /(^|[?&#])lite(=1|[&#]|$)/i.test(flags)) &&
+      (touchDevice || /(^|[?&#])lite(=1|[&#]|$)/i.test(flags)) &&
       !/(^|[?&#])full(=1|[&#]|$)/i.test(flags);
     const src = useMobile ? demo.srcMobile! : demo.src;
 

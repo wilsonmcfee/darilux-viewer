@@ -118,9 +118,6 @@ export function createViewer(opts: ViewerOptions): Viewer {
      look identical from outside, and the HUD is what separates them. */
   const perf = new PerfHud(stage);
   let quality: SplatQualityControl | null = null;
-  // Which pipeline actually booted; the loader's bundle default keys off it
-  // (webgl2's CPU sort is linear in splat count — see sceneloader.ts).
-  let rendererKind: 'webgpu' | 'webgl2' | null = null;
 
   let closeupHero: HeroPoint | null = null; // hero currently being viewed up close
   let stickOverride: boolean | null = null; // __sticks(0/1); null = decide by device
@@ -273,7 +270,6 @@ export function createViewer(opts: ViewerOptions): Viewer {
     exitCloseupUI: () => exitCloseupUI(),
     flyToHero: (hero) => flyToHero(hero),
     onSceneUrl: (url) => authoring?.onSceneUrl(url),
-    renderer: () => rendererKind,
   });
 
   /* ---- Re-decide the touch layout when the CONDITION changes, not when a
@@ -350,7 +346,6 @@ export function createViewer(opts: ViewerOptions): Viewer {
     const { device, renderer } = await createDevice(canvas, {
       perfScale: phoneDock ? 0.75 : 0.5,
     });
-    rendererKind = renderer;
 
     // The canvas is sized by its host window (CSS 100%), not the browser window:
     // FILLMODE_NONE + RESOLUTION_AUTO track the element's client size.
