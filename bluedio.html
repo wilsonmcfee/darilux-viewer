@@ -5,6 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- Dark, unlike the reel page: this one is the room, not paper around it. -->
     <meta name="theme-color" content="#14100c" />
+
+    <!-- ONE SHAREABLE LINK: this page is the canonical Bluedio URL, and phones
+         are routed to the docked layout (bluedio-phone.html) from here.
+
+         CLIENT-SIDE on purpose — GitHub Pages is static hosting, so there is no
+         server to read a user agent. Inline and first in <head> so the decision
+         lands before any css/font/script request; location.replace keeps the
+         hop out of history, so Back does not bounce through it.
+
+         The test matches the codebase's convention (pointer: coarse, the same
+         primary-pointer probe joystick.ts uses) plus the PANEL's short axis in
+         CSS px — screen, not window, because a landscape phone is 874 CSS px
+         wide and any window-width test misroutes it (the trap MOBILE_NOTES §2
+         records, twice). Under 600 is a phone; an iPad Mini (744) and up stays
+         here, full-bleed, where the bigger canvas is the better experience.
+
+         Deterministic per device, so it cannot loop; the query and hash ride
+         along so every ?stats / ?win / ?lite flag survives the hop. ?layout=full
+         opts out — the full-bleed page is deliberately still reachable on a
+         fast phone (see bluedio-phone.html's header on why both pages exist).
+         When per-client sites templatize, this block is part of the template. -->
+    <script>
+      (function () {
+        if (/[?&]layout=full(&|#|$)/.test(location.search)) return;
+        var phone =
+          matchMedia('(pointer: coarse)').matches &&
+          Math.min(screen.width, screen.height) < 600;
+        if (phone) location.replace('bluedio-phone.html' + location.search + location.hash);
+      })();
+    </script>
     <title>Bluedio — Darilux Studio</title>
     <meta
       name="description"
