@@ -322,6 +322,12 @@ body.reel #disclaimer-open:hover {
   height: 100%;
   display: block;
   touch-action: none; /* we handle all drag/zoom gestures ourselves */
+  /* iOS Safari: a long-press mid-drag must not raise the callout/selection UI —
+     either one cancels the pointer stream and kills the orbit. Belt to the
+     touchmove/gesture* preventDefault braces in camera.ts. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
   outline: none;
 }
 
@@ -592,13 +598,26 @@ body.phone {
    outside. See the note in bluedio-phone.html. */
 body.phone .viewer-window.ratio-4x3 {
   flex: 0 0 auto;
-  width: 100%;
-  aspect-ratio: var(--viewer-aspect, 4 / 3);
-  margin: 0;
+  /* A rounded WINDOW floating in the shell, not a full-bleed band — the mockup
+     treatment. The base .viewer-window already has overflow: hidden, which is
+     what actually clips the canvas to the rounded corners. Width is definite
+     (see the max-height note below), so the inset narrows the window and the
+     RATIO yields the height. */
+  width: calc(100% - 2 * var(--phone-inset));
+  /* 1:1 by default — Will's on-device call (sketched over a screenshot): the
+     4:3 letterbox read as cut off. Square is still comfortably inside the fov
+     ceiling (v = h = 68.6° against the 80° cap), so the authored framing
+     survives intact; camera.ts compensates the vertical fov automatically.
+     `?win=N` still overrides — see the A/B table below. */
+  aspect-ratio: var(--viewer-aspect, 1 / 1);
+  margin: var(--phone-inset) auto 0;
+  /* Under a notch/Dynamic Island the inset alone puts the window's top corners
+     behind the hardware (viewport-fit=cover). Take whichever clearance is
+     larger; a browser that cannot parse env() drops this line and keeps the
+     shorthand above. */
+  margin-top: max(var(--phone-inset), env(safe-area-inset-top));
   border: 0;
-  border-left: 0;
-  border-right: 0;
-  border-radius: 0;
+  border-radius: var(--phone-radius);
   /* TWO caps, and the second is the one that matters once `?win` is in play.
 
      `74svh` stops a very short landscape window (a rotated phone, a split view)
@@ -633,17 +652,26 @@ body.phone .viewer-window.ratio-4x3 {
      would collapse to its min-height, and the i / points row would be pushed
      off the bottom of the screen where `overflow: hidden` eats it.
 
-     `@supports` asks the question directly, so the `var()` is safe inside it. */
-  max-height: min(74vh, calc(100vh - 242px));
+     `@supports` asks the question directly, so the `var()` is safe inside it.
+
+     BOTH caps also pay for the window's top inset (margin-top above): the shell
+     is window + margin + dock, so a cap that ignored the margin would let the
+     window grow 10px past the budget and squeeze the dock below --dock-min-h —
+     which, min-height being a floor, becomes an overflow of the shell, and the
+     controls row rides off the bottom exactly as the stale-176px comment above
+     records. (The vh line uses the literal 252 = 242 + 10 for the same
+     no-var()-outside-@supports reason as the 242 it replaces.) */
+  max-height: min(74vh, calc(100vh - 252px));
 }
 @supports (height: 1svh) {
   body.phone .viewer-window.ratio-4x3 {
-    max-height: min(74svh, calc(100svh - var(--dock-min-h)));
+    max-height: min(74svh, calc(100svh - var(--dock-min-h) - var(--phone-inset)));
   }
 }
 
 /* ---- The window's shape, and the one number worth A/B-ing on a phone -------
-   `--viewer-aspect` defaults to 4/3, which is what the layout was specified as.
+   `--viewer-aspect` defaults to 1/1 — the layout was specified at 4:3, and the
+   square is the 2026-08-31 revision, judged on the phone against a sketch.
    `?win=N` overrides it (`__win(n)` from a console) because the right answer
    here is a judgement about how the page FEELS, and there is a genuine
    candidate on the other side of it.
@@ -657,8 +685,8 @@ body.phone .viewer-window.ratio-4x3 {
 
      aspect   window    dock    v fov   h fov    authored framing intact?
      16:9     375x211   601px   42.0    68.6     yes
-     4:3      375x281   531px   54.2    68.6     yes   <- shipped default
-     1:1      375x375   437px   68.6    68.6     yes
+     4:3      375x281   531px   54.2    68.6     yes   <- the original spec
+     1:1      375x375   437px   68.6    68.6     yes   <- shipped default
      0.85     375x441   371px   77.5    68.6     yes   <- the ceiling, exactly
      0.80     375x469   343px   80.0    67.7     NO, clipping begins
      9:16     375x667   145px   80.0    50.5     NO, 62% of the framing left
@@ -691,11 +719,20 @@ body.phone .viewer-window.ratio-4x3 {
      --dock-controls-h  the i / points row at the bottom
      --dock-pads-h      the thumb-pad row above it
      --dock-min-h       what the dock must never be squeezed below, which is
-                        what caps the viewer window (see .ratio-4x3 above) */
+                        what caps the viewer window (see .ratio-4x3 above)
+   Plus the two numbers of the docked page's WINDOW treatment (see the mockup
+   in the working docs): the viewer and the hero card share one corner radius,
+   which is what makes them read as parts of the same object, and the window
+   floats inside the shell rather than bleeding to its edges.
+     --phone-radius     the shared corner radius (viewer window, hero card,
+                        help card)
+     --phone-inset      the air between the viewer window and the shell */
 :root {
   --dock-controls-h: 46px;
   --dock-pads-h: 196px;
   --dock-min-h: 242px; /* controls + pads */
+  --phone-radius: 22px;
+  --phone-inset: 10px;
 }
 
 /* Poster-time copy: it explains the sticks to someone who has not stepped in
@@ -891,14 +928,30 @@ body.phone #phone-dock #info-card {
   border-color: rgba(242, 237, 229, 0.34);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  /* The same radius as the viewer window above — the mockup's design language:
+     the window and the card are two rounded panes of one object, not a frame
+     plus a dialog that happen to share a page. */
+  border-radius: var(--phone-radius);
 }
-body.phone #phone-dock .hero-card-nav,
 body.phone #phone-dock .stage-ctl {
   background: var(--shell-2);
   border-color: rgba(242, 237, 229, 0.28);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+/* The stepper arrows lose their circles here (2026-08-31, Will's call): the
+   glass disc earned its keep floating over a live splat, but on the dock's
+   flat ground it read as two spare buttons boxing the card in. Bare glyphs,
+   same 36px hit target — only the paint changes. The :hover restatement keeps
+   the desktop review pass from resurrecting the disc via the base rule. */
+body.phone #phone-dock .hero-card-nav,
+body.phone #phone-dock .hero-card-nav:hover {
+  background: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body.phone #phone-dock .hero-card-nav:hover { color: var(--shell-ink); }
 
 /* ---- The hero card, docked ----------------------------------------------- */
 /* The mockup's second state: the card takes the dock and the pads go away.
@@ -1004,6 +1057,29 @@ body.phone #phone-dock #info-card {
 }
 body.phone #phone-dock #info-card.open {
   transform: translateY(calc(-50% - var(--dock-controls-h) / 2));
+}
+
+/* ---- The leave-the-room ×, on this page: hidden until summoned -------------
+   A measured UX bug, not a taste call: in a close-up the card's × (top-left of
+   the CARD) and the stage's × (top-right of the WINDOW) were both on screen,
+   and visitors reaching to close the card pressed the top one — leaving the
+   whole room when they meant to put a piece of gear down. So on the docked
+   page the stage × starts invisible and is revealed by a deliberate tap on the
+   upper third of the viewer itself (wired in phonedock.ts), then hides again
+   after a few idle seconds.
+
+   `visibility` rides along with the opacity so the hidden button is also out
+   of the tab order and unclickable — an opacity-0 element still takes both.
+   The delay on the way out lets the fade finish before visibility snaps. */
+body.phone #stage-exit {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s var(--ease), visibility 0s linear 0.3s;
+}
+body.phone #stage-exit.revealed {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s var(--ease);
 }
 
 /* ---- Poster, on this page ------------------------------------------------ */

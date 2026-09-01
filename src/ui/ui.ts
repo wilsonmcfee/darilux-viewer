@@ -404,9 +404,15 @@ export class UI {
     const modal = $('disclaimer');
     const open = () => modal.classList.remove('hidden');
     const close = () => modal.classList.add('hidden');
-    const opener = $('disclaimer-open');
-    opener.addEventListener('click', open);
-    this.disposers.push(() => opener.removeEventListener('click', open));
+    /* The trigger is OPTIONAL per page — the docked phone layout ships without
+       one — so this is a plain lookup rather than the throwing $() the rest of
+       the chrome gets. A page with no #disclaimer-open simply has no way to
+       open the modal; everything else about it still boots. */
+    const opener = document.getElementById('disclaimer-open');
+    if (opener) {
+      opener.addEventListener('click', open);
+      this.disposers.push(() => opener.removeEventListener('click', open));
+    }
     $('disclaimer-close').addEventListener('click', close);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) close();

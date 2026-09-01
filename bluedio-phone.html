@@ -59,10 +59,11 @@
     <div id="stage-dock" hidden></div>
 
     <div class="phone-shell">
-      <!-- The scene. `ratio-4x3` rather than one of the reel page's ratio-*
-           classes: those are re-shaped to 9:16 by the portrait media query, and
-           this window must NOT be, since staying inside the fov cap is the
-           point of it. -->
+      <!-- The scene. `ratio-4x3` is a historical name — the window ships 1:1
+           now (`--viewer-aspect` in stage.css; `?win=N` overrides) — but it is
+           deliberately NOT one of the reel page's ratio-* classes: those are
+           re-shaped to 9:16 by the portrait media query, and this window must
+           not be, since staying inside the fov cap is the point of it. -->
       <div class="viewer-window ratio-4x3" data-demo="bluedio">
         <div class="poster">
           <div class="room"></div>
@@ -74,15 +75,12 @@
         </div>
       </div>
 
-      <!-- The disclaimer trigger. NOT optional chrome: ui.ts resolves
-           #disclaimer-open eagerly in its constructor and throws on a miss, so
-           a page without it does not merely lose a link, it fails to boot.
-           Outside the window rather than inside the poster, because the poster
-           is now only 281px tall and this is the one piece of page furniture
-           that should survive stepping into the room. -->
-      <div class="phone-foot">
-        <button id="disclaimer-open" type="button">About this demo</button>
-      </div>
+      <!-- No "About this demo" trigger on this page — dropped by design (the
+           2026-08 mobile pass): it was the one piece of page furniture floating
+           over the dock, and the modal it opened is desktop reading. ui.ts
+           treats #disclaimer-open as optional, so its absence costs nothing;
+           put the .phone-foot block back if the disclaimer ever needs to be
+           reachable from a phone. -->
 
       <!-- The dock. Empty in the markup on purpose: main.ts moves the thumb
            sticks, the controls row and the hero card in here after

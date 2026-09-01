@@ -96,8 +96,64 @@ export function mountPhoneDock(): HTMLElement | null {
      exact defect the state machine exists to close. */
   dock.dataset.state = 'poster';
 
+  installExitReveal();
   installWindowShapeKnob();
   return dock;
+}
+
+/* ---- The leave-the-room ×: hidden until summoned ---------------------------
+   Visitors in a close-up were pressing the stage's × (top-right of the window)
+   when they meant the CARD's × — and leaving the whole room. On this page the
+   stage × therefore starts invisible (stage.css, body.phone) and is revealed by
+   a deliberate TAP on the upper third of the viewer itself, then hides again
+   after a few idle seconds. A tap, not a touch: a drag is the orbit gesture and
+   must not flash UI while the visitor is looking around, so anything that moves
+   past the slop or outlasts a beat is ignored. */
+
+/** How much of the window's height, from the top, counts as the reveal zone. */
+const EXIT_REVEAL_ZONE = 1 / 3;
+/** How long the × stays up after the tap that summoned it. */
+const EXIT_REVEAL_MS = 3000;
+/** A press that travels further than this is a drag, not a tap. */
+const TAP_SLOP_PX = 12;
+/** A press that lasts longer than this is a hold, not a tap. */
+const TAP_MAX_MS = 400;
+
+function installExitReveal(): void {
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('viewer');
+  const exit = document.getElementById('stage-exit');
+  if (!stage || !canvas || !exit) {
+    console.warn(`${logTag()} phone dock: no stage/exit to wire the × reveal to`);
+    return;
+  }
+
+  let down: { x: number; y: number; t: number; id: number } | null = null;
+  let hideTimer = 0;
+
+  /* On the STAGE, not the window: both listeners die with the injected chrome
+     on destroy(), so there is nothing to dispose. The camera's pointer capture
+     retargets the up event to the canvas, which still bubbles through here. */
+  stage.addEventListener('pointerdown', (e: PointerEvent) => {
+    // Only presses that start on the canvas itself count — a tap on a hero
+    // dot up there is a fly-to, and revealing the × over it would be noise.
+    down =
+      e.target === canvas
+        ? { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId }
+        : null;
+  });
+  stage.addEventListener('pointerup', (e: PointerEvent) => {
+    if (!down || e.pointerId !== down.id) return;
+    const travelled = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    const held = performance.now() - down.t;
+    down = null;
+    if (travelled > TAP_SLOP_PX || held > TAP_MAX_MS) return; // a drag or a hold
+    const r = stage.getBoundingClientRect();
+    if (e.clientY - r.top > r.height * EXIT_REVEAL_ZONE) return; // not up top
+    exit.classList.add('revealed');
+    window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => exit.classList.remove('revealed'), EXIT_REVEAL_MS);
+  });
 }
 
 /**
@@ -114,8 +170,8 @@ export function mountPhoneDock(): HTMLElement | null {
  * vertical ceiling, past which it starts giving the horizontal away instead.
  * **0.85 is exactly where that ceiling starts to bind**, so it is the tallest
  * window that still shows everything the hero poses were composed to show, and
- * it lands the dock at ~371px on a 375x812 phone rather than 4:3's 531px. The
- * full table is in style.css beside the rule this writes to.
+ * it lands the dock at ~371px on a 375x812 phone against the square default's
+ * ~437px. The full table is in stage.css beside the rule this writes to.
  *
  * Clamped to a sane band: the failure mode of a typo here is a window taller
  * than the screen with no dock under it, or one so short the scene is a letter
@@ -139,6 +195,6 @@ function installWindowShapeKnob(): void {
   (window as unknown as { __win: (n?: number) => string }).__win = (v) =>
     v === undefined
       ? getComputedStyle(document.documentElement).getPropertyValue('--viewer-aspect') ||
-        '4 / 3 (default)'
+        '1 / 1 (default)'
       : set(Number(v));
 }
