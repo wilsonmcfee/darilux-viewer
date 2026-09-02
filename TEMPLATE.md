@@ -361,8 +361,12 @@ interesting. Detail in "Performance" below.
 | `?gl` | force the WebGL2 fallback, to reproduce an older phone at a desk |
 | `?res=N` | override the render pixel ratio outright. `?res=1` = the 2026-08-23 build |
 | `?perf=N` | override just the mobile scale. `?perf=0.5` = SuperSplat's default, `?perf=1` = SuperSplat with performance mode off |
-| `?lite=1` | load the reduced 1.2M bundle (`srcMobile`) — the pre-2026-08-25 mobile default |
-| `?full=1` | force the full 2.53M asset (now also the default on every device) |
+| `?lite=1` | load the reduced 1.6M bundle (`srcMobile`) — the default on phones and on WebGL2 |
+| `?full=1` | force the full 2.53M asset (the default only on a WebGPU desktop) |
+| `?sortdist=N` | metres of camera travel before a re-sort (default 0.05; 0 = engine stock). `__sortGate({distance})` |
+| `?sortangle=N` | the directional-sort twin, degrees (only after `__splat({radialSorting:false})`). `__sortGate({angle})` |
+| `?pbo=1` | WebGL2: upload the sort order through a PBO instead of one `texImage2D`. For Firefox A/Bs. `__pbo(1)` |
+| `?flybake=1` | keep re-baking colour DURING fly-ins (held by default). `__flyBake(1)` |
 | `?ondemand=0` / `=1` | force on-demand rendering off / on. Default: on for touch |
 | `?win=N` | docked page only — the viewer window's aspect ratio. `__win(n)` |
 | `?author` | authoring mode; also forces the full asset and disables walk mode |
@@ -375,7 +379,8 @@ interesting. Detail in "Performance" below.
 Console-only: `__splat()` for the eight splat cost/quality knobs (including
 `__splat('lastpass')`, the preset judged too aggressive on 2026-08-24), plus the
 existing `__walk(0/1)`, `__eyeHeight(m)`, `__walkDebug()`, `__logPose()` and
-`__logAnchor()`.
+`__logAnchor()`. `__sortGate()`, `__flyBake()` and `__pbo()` are the console
+twins of the 2026-09-02 profiling flags above.
 
 ### The stage controls
 
@@ -537,9 +542,13 @@ the orbit pivot sits, as a fraction of the camera-to-anchor distance.
 
 ## Performance — where the frame time goes
 
-**Profiled 2026-08-23.** This section used to open "nobody has profiled this
-viewer yet". That is no longer true, and everything below is measurement rather
-than arithmetic. The instrument is in the page: **`?stats`**.
+**Profiled 2026-08-23, and again 2026-09-02.** This section used to open
+"nobody has profiled this viewer yet". That is no longer true, and everything
+below is measurement rather than arithmetic. The instrument is in the page:
+**`?stats`**. The 2026-09-02 pass — a Firefox profile from a laptop, a screen
+recording from an iPhone 18 Pro, and a desk reproduction with `?gl` — is
+written up in "Profiled 2026-09-02" below; read it before touching the sort or
+the bake.
 
 ### Read the instrument first
 
@@ -548,7 +557,8 @@ than arithmetic. The instrument is in the page: **`?stats`**.
 ```
 webgl2  60 fps  worst 17ms
 375x812  0.30 Mpx  dpr 1.00
-1.20M splats  sort 8ms x16
+1.60M splats  sort 8ms x16
+up x7 4.9ms  bake x2
 ```
 
 Every line answers a question you would otherwise guess at.
@@ -572,6 +582,16 @@ Every line answers a question you would otherwise guess at.
   - *sort longer than a frame* → the order arrives stale, so the image **swims**
     while you move rather than merely running slow. Only cutting splat COUNT
     helps; the sort is linear in it and no pixel knob touches it.
+- **up** *(added 2026-09-02, WebGL2 only)* — order-texture uploads this window
+  and the mean time the main thread spent inside each `texImage2D`. Every
+  completed sort re-uploads the WHOLE order texture (11.67 MB at 2.53M), and
+  that call is the one place a frame waits for the GPU queue — so ~1 ms means
+  the GPU is keeping up and 5-18 ms means it is not. `--` on WebGPU, where the
+  order never leaves the GPU.
+- **bake** *(added 2026-09-02)* — full colour re-bakes this window, i.e. the SH
+  pass over every resident splat that camera *translation* triggers. GPU work,
+  invisible to every other number here. If the frame dips and `sort` and `up`
+  are quiet, this is what did it.
 
 Two companion flags make the phone reproducible at a desk:
 
@@ -841,6 +861,16 @@ whatever fps the visitor last moved at, which is worse than a wrong number.
 
 ### Still on the table
 
+- **A mobile bundle without spherical harmonics.** With `shN.bands = 0` the
+  engine never runs the colour re-bake at all (`hasSphericalHarmonics` false),
+  the two `shN_*.webp` files (~3.4 MB of the 22.6 MB) go away, and the fly-in
+  hold becomes moot. The cost is view-dependent colour — a flatter specular on
+  the drum shells and the glass. Worth an on-device A/B before the next
+  `mobile_asset.py` run; see "Profiled 2026-09-02".
+- **Upstream PRs** for a public sort threshold and a chunked WebGL2 order
+  upload — see the end of "Profiled 2026-09-02". Until then
+  `core/gsplatinternals.ts` carries the local version and must be re-checked on
+  every engine bump.
 - **`gsplatCentersEnabled = false` on WebGPU**, which skips a ~71 MB load-time
   transient. Must stay true on WebGL2, where the CPU sorter needs the centres.
 - **Streamed SOG with real LOD levels**, which is the only route to
@@ -867,6 +897,118 @@ whatever fps the visitor last moved at, which is worse than a wrong number.
 A browser pane that is not displayed reports `document.hidden`, so
 `requestAnimationFrame` never fires and the engine does not tick. Profile on a
 real device, or with the pane visible. See "Gotchas" #13.
+
+### Profiled 2026-09-02 — the order upload, the re-bake, and two phones
+
+Three new datapoints arrived together, and they point at two mechanisms,
+neither of which is the hero points or the cards.
+
+**1. A Firefox profile from a laptop (Linux, so WebGL2).** 51% of all script
+time — 1.08 s of a 14 s capture — was inside `WebGL2RenderingContext.texImage2D`,
+reached through `applyPendingSorted → onSorted → setOrderData → uploadDirect`.
+That is the engine uploading the result of the CPU depth sort. On WebGL2 the
+order lives in an R32U texture of `textureSize²` texels (1708² = 11.67 MB for
+2.53M splats) and the engine re-specifies the WHOLE texture with one
+`texImage2D` every time a sort completes. It does this deliberately: its source
+says the PBO + `texSubImage2D` alternative "stalls the main thread on multi-MB
+uploads through Chrome's renderer→GPU IPC". The main thread was otherwise ~85%
+idle in that profile — the laptop is GPU-bound, and `texImage2D` is where the
+main thread queues behind the GPU.
+
+**2. A screen recording from an iPhone 18 Pro (WebGPU, docked page, 1.6M).**
+Free roam holds 60 fps with a worst frame of 17-19 ms. Every dip — 36-52 fps
+with 60-94 ms worst frames — coincides with a hero fly-in or the fly-home after
+closing a card. Nothing else in the recording moves the camera metres in a
+second. The one thing in the pipeline that keys off camera TRANSLATION and
+touches every splat is the colour re-bake: at the mobile preset's 30° it runs
+every 19 cm, so a 4 m fly-in bakes 1.6M splats ~20 times in 1.6 s.
+
+**3. Reproduced at a desk** — `bluedio.html?gl&stats`, Chrome/Windows, 2.53M at
+1280x720, the engine pumped by hand because the pane was hidden (gotcha 13).
+Four seconds of each motion, `radial` = `radialSorting`, `cua` =
+`colorUpdateAngle`:
+
+| motion | settings | sorts | uploads | upload mean / max | main-thread mean / worst | colour bakes |
+|---|---|---|---|---|---|---|
+| mouse-look, 6 drags | directional (old desktop default) | 6 | 6 × 11.67 MB | 1.0 / 2.4 ms | 0.3 / 2.5 ms | — |
+| mouse-look, 6 drags | radial | **0** | 0 | — | 0.1 / 0.3 ms | — |
+| walk 4 s | radial, cua 10 (old desktop default) | 111 | 110 | 5.0 / 17.4 ms | 6.7 / **70 ms** | **62** |
+| walk 4 s | directional | 0 | 1 | — | 0.6 / 20.6 ms | 63 |
+| walk 4 s | radial, cua 30 | 112 | 112 | 4.9 / 17.6 ms | 4.8 / 33 ms | 21 |
+| walk 4 s | radial, cua 89.9 (no bakes) | 113 | 113 | 4.7 / 17.9 ms | 4.1 / 20 ms | 0 |
+| walk 4 s | radial, cua 30, **sort gate 5 cm** | 73 | 73 | **0.8** / 8.6 ms | 2.0 / 19.6 ms | 22 |
+| walk 4 s | radial, cua 30, sort gate 25 cm | 16 | 16 | 0.5 / 0.6 ms | 0.5 / 2.2 ms | 21 |
+| walk 4 s | radial, cua 10, **PBO path** | 101 | (PBO) | — | **12.1** / 49.9 ms | 59 |
+| walk 4 s | **1.6M bundle**, radial, cua 30, gate off | 234 | 234 × 7.37 MB | 0.6 / 4.8 ms | 1.4 / 5.7 ms | 21 |
+| walk 4 s | **1.6M bundle**, radial, cua 30, gate 5 cm — *as shipped* | 71 | 72 × 7.37 MB | 0.3 / 0.6 ms | 0.5 / 2.7 ms | 20 |
+
+The last two rows are the shipped WebGL2 configuration and its one-knob A/B.
+Note that the smaller bundle sorts FASTER (12 ms), so without the gate it
+sorts MORE often — 58 a second — which is why count alone was never going to
+settle the upload problem. The HUD read `up x4 0.3ms  bake x1` per 250 ms
+window while walking, and the hero fly-in and fly-home each showed `bake` at 0
+in flight and exactly 1 on arrival.
+
+What the table says, in order:
+
+- **The two sort modes are not "more" and "less" — they choose which motion
+  costs.** Directional re-sorts on rotation (0.057°) and never on translation;
+  radial re-sorts on translation (a third of a millimetre) and never on
+  rotation. Both are correct: depth along a fixed axis is invariant under
+  translation, distance is invariant under rotation. Mouse-look is the
+  continuous motion on a desktop, so radial is now in the BASE preset for every
+  device (it was mobile-only).
+- **At walking speed a re-sort completes as fast as the worker can produce one**
+  — 27-28 a second — and each one is an 11.67 MB upload. The upload is ~1 ms
+  when the GPU is idle and 5 ms here when it is not; on the Firefox laptop it
+  was 18 ms. The cost is GPU back-pressure, not the memcpy.
+- **The colour re-bake is the other GPU load.** 15 a second at the old desktop
+  default; cutting it to 30° took the worst walking frame from 70 to 33 ms, and
+  removing it entirely to 20 ms. 30° is now BASE on every device.
+- **The sort gate.** The engine's re-sort threshold is a hard-coded 1e-3 with no
+  public knob (the LOD test has `lodUpdateDistance`; the sort test has
+  nothing), so `core/gsplatinternals.ts` replaces the method on the live
+  manager, with feature checks and a one-time warning if the engine's shape
+  changes. Default 5 cm, chosen from the sort's own latency: a sort lands 20-37
+  ms after it was asked for, so at 1.25 m/s the order on screen is already
+  3-5 cm behind the camera. Note the upload mean falling from 4.9 to 0.8 ms on
+  a 35% cut in count — that is the GPU queue finally draining between uploads.
+  Inert on WebGPU, which sorts on the GPU every frame and never runs the test.
+- **The PBO path is worse on Chrome**, exactly as the engine's comment says:
+  12.1 ms mean main-thread frame against 6.7 ms. It is exposed as `?pbo=1` for
+  one reason — nobody has measured what Firefox does with either path, and
+  Chrome's IPC rationale does not apply there.
+
+**What changed as a result** (all in the code, none in the data):
+
+1. `BASE_PRESET` — `radialSorting: true`, `colorUpdateAngle: 30` — on every
+   device. Neither knob changes the picture at rest, so the authoring view is
+   untouched.
+2. The sort gate, 5 cm default, `?sortdist=N`.
+3. WebGL2 loads the 1.6M bundle on any device (`?full=1` overrides). The
+   upload drops to ~7.4 MB, the sort from 20 to 12 ms, the bake by the same
+   ratio, on the one path that has no GPU sort.
+4. Colour re-bakes are HELD for the duration of a fly-in and fired once on
+   arrival (`suspendColorBake` / `resumeColorBake`; released on arrival,
+   interruption, scene swap). `?flybake=1` restores the old behaviour for an
+   A/B on the phone. Only the view-dependent specular component goes stale, on
+   a picture moving too fast to read it.
+5. The HUD gained an `up` line (WebGL2 uploads and their cost) and a `bake`
+   line (colour re-bakes), so both mechanisms are readable on the device that
+   has the problem.
+
+**What to ask the two friends to run.** The Firefox laptop:
+`bluedio.html?stats` as shipped, then `?stats&sortdist=0` (the old cadence),
+then `?stats&pbo=1`, each while walking with W — read `up`. The iPhone:
+`?stats` then `?stats&flybake=1`, tapping a hero and closing it — read `worst`
+and `bake` during the flight. If the fly-in dips survive with `bake --`, the
+hypothesis is wrong and the next suspect is the DOM work at card open/close.
+
+**The durable fix is upstream.** Two engine changes would make most of this
+file unnecessary: a `scene.gsplat.sortUpdateDistance` / `sortUpdateAngle` pair
+next to the existing `lodUpdate*` params, and a double-buffered,
+chunked-over-frames order upload on WebGL2 so no single frame carries 11.67 MB.
+Both are small PRs against `gsplat-manager.js` and `gsplat-work-buffer.js`.
 
 
 ## Gotchas that cost real time on Bluedio

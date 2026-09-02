@@ -49,6 +49,24 @@
                                           in it and no pixel knob touches it.
                 Shows "--" when nothing has sorted in the window, which is the
                 normal reading for a still camera and for the WebGPU path.
+     up         ADDED 2026-09-02. WebGL2 only: how many times this window the
+                completed sort was uploaded to the GPU, and the mean time the
+                main thread spent inside that texImage2D. Every completed sort
+                re-specifies the WHOLE order texture — 11.67 MB at 2.53M — and
+                this call is the one place in a frame where the main thread
+                waits for the GPU queue, so its time is a GPU-load gauge as
+                much as a copy cost: ~1 ms with the GPU idle, 5-18 ms with it
+                saturated. The Firefox/Linux profile that prompted the pass
+                showed 51% of all script time here. Reads "--" on WebGPU, where
+                the order lives in a storage buffer and is never uploaded.
+     bake       ADDED 2026-09-02, both paths: full colour re-bakes this window
+                — the pass that re-evaluates view-dependent colour for EVERY
+                resident splat, triggered by camera translation
+                (colorUpdateAngle). The bake runs on the GPU, so its cost never
+                shows in main-thread time; the count is the only thing the page
+                can see, and it is the number that explains a dip during a
+                fly-in that no sort or upload accounts for. Fly-ins hold this
+                at 0 by design (main.ts) and fire one on arrival.
 
    COST OF THE HUD ITSELF
 
@@ -59,9 +77,15 @@
    ========================================================================== */
 
 import type { AppBase } from 'playcanvas';
+import { hookBakeCounters, type BakeCounters } from '../core/gsplatinternals';
 
 /** How long a sample window is, in ms. 250 = four text updates a second. */
 const WINDOW_MS = 250;
+
+/* Only uploads at least this big are timed. The order texture is 4 bytes per
+   texel over textureSize² (7.4 MB at 1.6M, 11.67 MB at 2.53M); everything else
+   the engine puts through texImage2D at runtime is kilobytes. */
+const BIG_UPLOAD_BYTES = 1e6;
 
 /* How long without a RENDERED frame before the HUD calls itself idle.
    400 ms is comfortably longer than the 3-frame render hold in main.ts and than
@@ -85,6 +109,14 @@ export class PerfHud {
   // Depth-sort timings, accumulated from the engine event rather than sampled.
   private worstSortMs = 0;
   private sortsInWindow = 0;
+  // Order-texture uploads (WebGL2), from the texImage2D hook below.
+  private uploadsInWindow = 0;
+  private uploadMs = 0;
+  private uploadHooked = false;
+  // Colour / geometry re-bakes, from gsplatinternals.hookBakeCounters. The
+  // counters are cumulative; the window keeps the value they had at its start.
+  private bakes: BakeCounters = { color: 0, geometry: 0 };
+  private bakesAtWindowStart = 0;
 
   private enabled = false;
   private renderer = '?';
@@ -112,9 +144,40 @@ export class PerfHud {
     this.splats = n;
     }
 
+  /**
+   * Time the big texImage2D calls on THIS device's context. Installed on the
+   * first enable, never on the prototype: an instance property shadows the
+   * prototype method for the engine's `gl.texImage2D(...)` calls and nothing
+   * else on the page. A disabled HUD therefore never even pays the byte-length
+   * comparison. Skipped entirely on WebGPU, which has no gl.
+   */
+  private hookUploads(): void {
+    if (this.uploadHooked || !this.app) return;
+    this.uploadHooked = true;
+    const gl = (this.app.graphicsDevice as unknown as { gl?: WebGL2RenderingContext }).gl;
+    if (!gl || typeof gl.texImage2D !== 'function') return;
+    const orig = gl.texImage2D as (...args: unknown[]) => void;
+    const hud = this;
+    (gl as unknown as { texImage2D: (...args: unknown[]) => void }).texImage2D = function (
+      this: WebGL2RenderingContext,
+      ...args: unknown[]
+    ): void {
+      const data = args[args.length - 1] as { byteLength?: number } | null;
+      if (!data || typeof data.byteLength !== 'number' || data.byteLength < BIG_UPLOAD_BYTES) {
+        orig.apply(this, args);
+        return;
+      }
+      const t = performance.now();
+      orig.apply(this, args);
+      hud.uploadsInWindow++;
+      hud.uploadMs += performance.now() - t;
+    };
+  }
+
   /** Show or hide. Returns the new state so `__stats()` can report it. */
   setEnabled(on: boolean): boolean {
     this.enabled = on;
+    if (on) this.hookUploads();
     if (on && !this.el) {
       this.el = document.createElement('div');
       this.el.className = 'perf-hud';
@@ -154,6 +217,10 @@ export class PerfHud {
    */
   tick(): void {
     if (!this.enabled || !this.el) return;
+    /* The engine's work buffer is created lazily and recreated on a renderer
+       change, so the bake hook is (re)attached every frame — a two-level Map
+       walk that skips anything already hooked. */
+    if (this.app) hookBakeCounters(this.app, this.bakes);
     const now = performance.now();
     if (now - this.lastFrameAt < IDLE_MS) return; // frames are still arriving
     if (now - this.lastIdlePaint < WINDOW_MS) return; // same 4/s DOM budget
@@ -166,7 +233,8 @@ export class PerfHud {
     this.el.textContent =
       `${this.renderer}  idle · not drawing\n` +
       `${w}x${h}  ${((w * h) / 1e6).toFixed(2)} Mpx  dpr ${dpr.toFixed(2)}\n` +
-      `${(this.splats / 1e6).toFixed(2)}M splats  sort --`;
+      `${(this.splats / 1e6).toFixed(2)}M splats  sort --\n` +
+      `up --  bake --`;
 
     /* Start the next moving window from here, so the first reading after the
        visitor moves again measures motion rather than however long they sat
@@ -174,6 +242,15 @@ export class PerfHud {
     this.windowStart = now;
     this.frames = 0;
     this.worstMs = 0;
+    this.resetWindowCounters();
+  }
+
+  private resetWindowCounters(): void {
+    this.worstSortMs = 0;
+    this.sortsInWindow = 0;
+    this.uploadsInWindow = 0;
+    this.uploadMs = 0;
+    this.bakesAtWindowStart = this.bakes.color;
   }
 
   /**
@@ -211,16 +288,24 @@ export class PerfHud {
     // does not re-sort, and printing 0 ms would read as "the sort is free".
     const sort =
       this.sortsInWindow > 0 ? `${this.worstSortMs.toFixed(0)}ms x${this.sortsInWindow}` : '--';
+    // Same "--" convention: no upload and no bake this window are both healthy
+    // readings, and 0 would read as "free".
+    const up =
+      this.uploadsInWindow > 0
+        ? `x${this.uploadsInWindow} ${(this.uploadMs / this.uploadsInWindow).toFixed(1)}ms`
+        : '--';
+    const bakes = this.bakes.color - this.bakesAtWindowStart;
+    const bake = bakes > 0 ? `x${bakes}` : '--';
 
     this.el.textContent =
       `${this.renderer}  ${fps.toFixed(0)} fps  worst ${this.worstMs.toFixed(0)}ms\n` +
       `${w}x${h}  ${mp.toFixed(2)} Mpx  dpr ${dpr.toFixed(2)}\n` +
-      `${(this.splats / 1e6).toFixed(2)}M splats  sort ${sort}`;
+      `${(this.splats / 1e6).toFixed(2)}M splats  sort ${sort}\n` +
+      `up ${up}  bake ${bake}`;
 
     this.windowStart = now;
     this.frames = 0;
     this.worstMs = 0;
-    this.worstSortMs = 0;
-    this.sortsInWindow = 0;
+    this.resetWindowCounters();
   }
 }

@@ -496,9 +496,15 @@ body.reel #disclaimer-open:hover {
      the pixel row's "1024x2048  2.10 Mpx  dpr 2.00" (29ch) — at ~6.6px/char for
      the 11px monospace above, plus 16px of horizontal padding. Overshoot on
      purpose: the failure mode here is silently clipping the very number the HUD
-     was opened to read. */
+     was opened to read.
+
+     The height is FOUR lines (2026-09-02: the `up`/`bake` row) at the 14.85px
+     line-height above plus 10px of vertical padding = 69.4px. It bit once
+     already: the row was added, the DOM held four lines, and `contain: strict`
+     clipped the fourth so cleanly that only a screenshot showed it missing.
+     Add a line, add 15px here. */
   width: 232px;
-  height: 52px;
+  height: 70px;
 }
 /* ===========================================================================
    THE DOCKED PHONE LAYOUT — bluedio-phone.html
