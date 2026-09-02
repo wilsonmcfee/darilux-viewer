@@ -37,8 +37,9 @@ import { HeroPointManager } from '../nav/heropoints';
 import { mountChrome } from './stage';
 import { TouchSticks, wantsTouchControls } from '../nav/joystick';
 import { PerfHud } from '../ui/perfhud';
-import { SplatQualityControl, MOBILE_PRESET } from './splatquality';
+import { SplatQualityControl, MOBILE_PRESET, BASE_PRESET } from './splatquality';
 import { installKnobs } from './knobs';
+import { installSortGate, setOrderUploadPath, type SortGateThresholds } from './gsplatinternals';
 import { mountPhoneDock, isPhoneLandscape, PHONE_LANDSCAPE_QUERY } from '../ui/phonedock';
 import { UI } from '../ui/ui';
 import { targetPixelRatio } from './device';
@@ -147,6 +148,48 @@ export function createViewer(opts: ViewerOptions): Viewer {
      card layout. 0.27 is the middle of the 25-30% Will judged by eye on a phone.
      Overridable with ?lift=N / __heroLift(n) — see camera.setHeroFrameLift(). */
   let heroLift = 0.27;
+
+  /* ---- The sort gate ------------------------------------------------------
+     How far the camera moves before the engine re-sorts — the knob the engine
+     does not expose (its own is a hard-coded 1e-3), installed over the live
+     manager by gsplatinternals.ts. In METRES, converted through the active
+     scene's unitsPerMetre so the number means the same thing in every room.
+
+     0.05 m is the default, and it is chosen from the sort's own latency rather
+     than taste. On WebGL2 a completed sort lands 20-37 ms after it was asked
+     for (the 2.53M sort takes ~20 ms in the worker, plus a frame), so at
+     walking speed (1.25 m/s) the order drawn on screen is ALREADY 3-5 cm
+     behind the camera. A 5 cm gate roughly doubles that staleness at full
+     walking speed and removes it entirely for the small motions — a gentle
+     stick push, the close-up sway — that used to re-sort every frame. Measured
+     while walking, 2.53M, radial, colorUpdateAngle 30:
+
+       gate        sorts/s   upload mean   worst frame
+       engine      28        4.9 ms        33 ms
+       5 cm        18        0.8 ms        20 ms
+       25 cm        4        0.5 ms         2 ms
+
+     The upload mean falling six-fold on a 35% cut in count is the important
+     line: texImage2D is where the main thread waits for the GPU, and at 28
+     uploads a second the GPU queue never drains. Inert on WebGPU (GPU sort,
+     every frame, no test). `?sortdist=N` / `__sortGate({distance})`; 0 = engine
+     stock. `angle` is the directional-sort twin, only reachable after
+     __splat({radialSorting:false}). */
+  let sortDistanceMetres = 0.05;
+  let sortAngleDegrees = 0;
+  const readSortGate = (): SortGateThresholds => ({
+    distanceMetres: sortDistanceMetres,
+    angleDegrees: sortAngleDegrees,
+    unitsPerMetre: loader.activeDemo?.walk?.unitsPerMetre ?? 1,
+  });
+  /* `?pbo=1` — the WebGL2 order upload through a PBO instead of texImage2D.
+     Re-applied every frame while set, because the engine recreates the work
+     buffer on a renderer change. See setOrderUploadPath() for who this is for. */
+  let orderUploadPath: 'direct' | 'pbo' = 'direct';
+  /* Hold colour re-bakes for the duration of a fly-in (see
+     SplatQualityControl.suspendColorBake). `?flybake=1` turns the hold off for
+     an A/B on the device. */
+  let holdBakeInFlight = true;
 
   /* ---- On-demand rendering state ----------------------------------------
      At boot scope rather than inside ensureApp() because loadDemo() has to arm
@@ -411,6 +454,11 @@ export function createViewer(opts: ViewerOptions): Viewer {
        client will not see on a laptop. */
     quality = new SplatQualityControl(app, renderer);
     const mobile = window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth <= 820;
+    /* BASE on every device — the two knobs that only govern how often work is
+       redone in MOTION (radial sort trigger, colour re-bake cadence), so the
+       picture at rest, and the authoring view, are exactly what they were.
+       The mobile preset is a superset and lands on top. */
+    quality.apply(BASE_PRESET);
     if (mobile) quality.apply(MOBILE_PRESET);
     console.info(`${logTag()} splat quality: ${quality.activePathNote}`);
     app.setCanvasFillMode(FILLMODE_NONE);
@@ -431,6 +479,9 @@ export function createViewer(opts: ViewerOptions): Viewer {
     // the rest of the close-up. Hide it here too.
     controller.onUserInteract = () => {
       if (closeupHero) heroes?.setHiddenHero(closeupHero);
+      // A drag mid-flight cancels the fly AND its onArrive, so the colour-bake
+      // hold would otherwise outlive the flight. Resume here, unconditionally.
+      quality?.resumeColorBake();
     };
     heroes = new HeroPointManager(camera, document.getElementById('hero-layer')!);
     heroes.onSelect = (hero) => selectHero(hero);
@@ -488,6 +539,18 @@ export function createViewer(opts: ViewerOptions): Viewer {
       },
       setStickOverride: (on) => {
         stickOverride = on;
+      },
+      getSortGate: () => ({ distance: sortDistanceMetres, angle: sortAngleDegrees }),
+      setSortGate: (g) => {
+        if (g.distance !== undefined) sortDistanceMetres = g.distance;
+        if (g.angle !== undefined) sortAngleDegrees = g.angle;
+      },
+      setOrderUploadPath: (p) => {
+        orderUploadPath = p;
+      },
+      setHoldBakeInFlight: (on) => {
+        holdBakeInFlight = on;
+        if (!on) quality?.resumeColorBake();
       },
     });
 
@@ -566,6 +629,12 @@ export function createViewer(opts: ViewerOptions): Viewer {
       // Auto-frame a bounds-only scene as soon as its bounding box is available.
       loader.tryAutoFrame();
       controller!.update(dt);
+
+      /* The engine builds its gsplat manager lazily and rebuilds it on a
+         renderer change, so the gate is (re)installed every frame — a
+         two-level Map walk, patched objects skipped. See gsplatinternals.ts. */
+      installSortGate(app!, readSortGate);
+      if (orderUploadPath === 'pbo') setOrderUploadPath(app!, 'pbo');
 
       /* Off `update`, not `frameend`, so the readout keeps refreshing on frames
          that were not drawn — otherwise it freezes mid-number the moment
@@ -800,6 +869,11 @@ export function createViewer(opts: ViewerOptions): Viewer {
        actively reading a card mid-drag pause is unaffected — the cost returns
        only while a close-up sways. If thermals resurface, dial the DURATION of
        the sway rather than its existence. */
+    /* Colour re-bakes are held for the flight and fire once on arrival — the
+       fix for the fly-in frame drops in the iPhone 18 Pro recording. Resumed
+       from onArrive below, from onUserInteract if the visitor grabs the camera
+       mid-flight, and from exitCloseupUI on a scene swap. */
+    if (holdBakeInFlight) quality?.suspendColorBake();
     controller!.flyToHero(
       hero.pose,
       1.6,
@@ -820,7 +894,13 @@ export function createViewer(opts: ViewerOptions): Viewer {
       // sits dead centre in front of the object it labels. Restored by
       // exitCloseupUI(). Stepping to another hero re-shows the previous one
       // because closeupHero is reset just below on every fly.
-      () => heroes!.setHiddenHero(hero),
+      () => {
+        heroes!.setHiddenHero(hero);
+        // The colour bake held for the flight fires on this very frame: the
+        // last easing step moved the camera, and the restored threshold is
+        // far below the distance accumulated in the air.
+        quality?.resumeColorBake();
+      },
     );
     // The pads go away for the duration of the close-up. closeupHero was set at
     // the top of this function, so the rule reads it as "a card is open" —
@@ -841,7 +921,12 @@ export function createViewer(opts: ViewerOptions): Viewer {
     if (!controller) return;
     controller.exitHero();
     exitCloseupUI();
-    if (loader.homePose) controller.flyTo(loader.homePose, 1.3);
+    if (loader.homePose) {
+      // The fly-home is the other flight in the recording's frame drops; same
+      // hold, released on arrival (or by onUserInteract if interrupted).
+      if (holdBakeInFlight) quality?.suspendColorBake();
+      controller.flyTo(loader.homePose, 1.3, () => quality?.resumeColorBake());
+    }
   }
 
   function exitCloseupUI(): void {
@@ -850,6 +935,11 @@ export function createViewer(opts: ViewerOptions): Viewer {
     heroes?.setActiveAnchor(null);
     heroes?.setHiddenHero(null); // the dot comes back with the card closed
     closeupHero = null;
+    // A scene swap or a destroy mid-flight ends the flight without onArrive;
+    // this runs on both paths (SceneLoader.load, destroy), so the hold cannot
+    // leak into the next scene. exitCloseup() re-holds AFTER this for the
+    // fly-home.
+    quality?.resumeColorBake();
     // The sticks come back with the card closed, for the same reason the dot
     // does — free roam has resumed. Must follow the closeupHero reset above.
     refreshSticks();

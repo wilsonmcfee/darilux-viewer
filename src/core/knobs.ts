@@ -31,6 +31,13 @@ export interface KnobDeps {
   getHeroLift(): number;
   setHeroLift(n: number): void;
   setStickOverride(on: boolean): void;
+  /** The sort gate: metres of translation / degrees of rotation before a re-sort. */
+  getSortGate(): { distance: number; angle: number };
+  setSortGate(g: { distance?: number; angle?: number }): void;
+  /** WebGL2 order-texture upload path A/B (see gsplatinternals.ts). */
+  setOrderUploadPath(p: 'direct' | 'pbo'): void;
+  /** Hold colour re-bakes while a fly-in is in the air. */
+  setHoldBakeInFlight(on: boolean): void;
 }
 
 /** Read URL params, apply the ones present, and register the console handles. */
@@ -153,6 +160,55 @@ export function installKnobs(deps: KnobDeps): void {
     deps.refreshHeroFraming();
     return deps.getHeroLift();
   };
+
+  /* ---- The 2026-09-02 profiling knobs ----------------------------------
+     Three handles from the pass that found the WebGL2 order-texture upload
+     (TEMPLATE.md → "Profiled 2026-09-02"). All three are A/B handles for a
+     device that is not this one — the Firefox/Linux laptop, the phone — so
+     all three are URL params first and console twins second.
+
+       ?sortdist=N      metres of camera travel before a re-sort (default
+                        0.05; 0 = engine stock, a third of a millimetre).
+                        __sortGate({distance: N})
+       ?sortangle=N     the directional-sort twin, degrees (default 0 = engine
+                        stock 0.057°). Only matters after
+                        __splat({radialSorting: false}). __sortGate({angle: N})
+       ?pbo=1           WebGL2 only: upload the order through a PBO +
+                        texSubImage2D instead of one texImage2D. The engine
+                        picked texImage2D because the PBO path stalls Chrome;
+                        this is for finding out what Firefox does.
+       ?flybake=1       keep re-baking colour DURING fly-ins (the hold is the
+                        default). __flyBake(0/1)
+
+     `?sortdist` reads NaN-safely and 0 is meaningful (engine stock), so it
+     uses the `!== null` form rather than the `> 0` guard the fov knobs use. */
+  const params = new URLSearchParams(window.location.search);
+  const sortDistRaw = params.get('sortdist');
+  if (sortDistRaw !== null && Number.isFinite(Number(sortDistRaw)) && Number(sortDistRaw) >= 0) {
+    deps.setSortGate({ distance: Number(sortDistRaw) });
+  }
+  const sortAngleRaw = params.get('sortangle');
+  if (sortAngleRaw !== null && Number.isFinite(Number(sortAngleRaw)) && Number(sortAngleRaw) >= 0) {
+    deps.setSortGate({ angle: Number(sortAngleRaw) });
+  }
+  if (/(^|[?&#])pbo(=1|[&#]|$)/i.test(window.location.search + window.location.hash)) {
+    deps.setOrderUploadPath('pbo');
+  }
+  if (/(^|[?&#])flybake(=1|[&#]|$)/i.test(window.location.search + window.location.hash)) {
+    deps.setHoldBakeInFlight(false);
+  }
+  (
+    window as unknown as {
+      __sortGate: (g?: { distance?: number; angle?: number }) => { distance: number; angle: number };
+    }
+  ).__sortGate = (g) => {
+    if (g && typeof g === 'object') deps.setSortGate(g);
+    return deps.getSortGate();
+  };
+  (window as unknown as { __flyBake: (on: unknown) => void }).__flyBake = (on) =>
+    deps.setHoldBakeInFlight(Boolean(Number(on)));
+  (window as unknown as { __pbo: (on: unknown) => void }).__pbo = (on) =>
+    deps.setOrderUploadPath(Number(on) ? 'pbo' : 'direct');
 
   /* ---- The frame-time readout -----------------------------------------
      `?stats` from the URL, `__stats(1)` from a console. The URL form is the

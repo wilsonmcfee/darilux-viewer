@@ -142,6 +142,20 @@ export class SceneLoader {
        is a phone; only a desktop has the headroom for the full asset by
        default.
 
+       2026-09-02, device OR renderer: the WebGL2 clause comes back, this time
+       on a measurement rather than a theory, and ALONGSIDE the device rule
+       rather than instead of it. Profiled at a desk with ?gl (TEMPLATE.md →
+       "Profiled 2026-09-02"): on WebGL2 every completed depth sort re-uploads
+       the whole order texture — 11.67 MB for 2.53M splats — and a walking
+       camera completes one about 27 times a second. That upload is the one
+       point where the main thread waits on the GPU, so its cost tracks GPU
+       load: ~1 ms on an idle GPU, 5 ms here under a walk, 18 ms on the
+       Firefox/Linux laptop whose profile prompted the pass. The 1.6M bundle
+       cuts the upload to ~7.4 MB, the sort from 20 to 12 ms and the SH bake
+       by the same ratio, on the one path that has no GPU sort to fall back
+       on. A WebGPU desktop keeps the full asset: nothing there is uploaded
+       per sort.
+
        `?lite=1` and `?full=1` still override in both directions — ?full=1 on
        the WebGPU phone is the honest A/B for whether its GPU can in fact
        carry 2.53M. Authoring mode still forces the full asset
@@ -151,10 +165,11 @@ export class SceneLoader {
     const flags = window.location.search + window.location.hash;
     const touchDevice =
       (window.matchMedia?.('(pointer: coarse)').matches ?? false) || window.innerWidth <= 820;
+    const webgl2 = !app.graphicsDevice.isWebGPU;
     const useMobile =
       !deps.authorMode &&
       !!demo.srcMobile &&
-      (touchDevice || /(^|[?&#])lite(=1|[&#]|$)/i.test(flags)) &&
+      (touchDevice || webgl2 || /(^|[?&#])lite(=1|[&#]|$)/i.test(flags)) &&
       !/(^|[?&#])full(=1|[&#]|$)/i.test(flags);
     const src = useMobile ? demo.srcMobile! : demo.src;
 

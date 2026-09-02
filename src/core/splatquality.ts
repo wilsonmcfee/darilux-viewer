@@ -255,13 +255,93 @@ export const ENGINE_DEFAULTS: Required<SplatQuality> = {
   antiAlias: false,
 };
 
+/**
+ * The BASE preset — every device, both renderers. Added 2026-09-02.
+ *
+ * Until this pass a desktop ran engine stock, on the argument that the
+ * authoring view should show exactly what a laptop visitor sees. That argument
+ * is about the picture AT REST, and neither knob here changes it: both decide
+ * how often work is redone while the camera MOVES. Measured at a desk on the
+ * WebGL2 path (?gl&stats, 2.53M, 1280x720, TEMPLATE.md → "Profiled
+ * 2026-09-02"):
+ *
+ * - `radialSorting` true. With the stock directional sort the trigger is the
+ *   forward vector at 0.057°, so a mouse-look drag requested a sort — and an
+ *   11.67 MB order-texture upload — on essentially every frame it moved (six
+ *   drags: six sorts, six uploads). Radial re-sorts on translation instead, and
+ *   the same six drags produced none. Walking then sorts continuously on
+ *   either setting's worst case, which is what the sort gate in main.ts is for.
+ * - `colorUpdateAngle` 30. At the stock 10° a 4 s walk re-baked the colour of
+ *   all 2.53M splats 62 times (15 a second) and the worst frame was 70 ms; at
+ *   30° it was 21 bakes and 33 ms. Only the view-dependent specular component
+ *   goes stale between bakes, and at 3 units/m 30° is a bake every 19 cm.
+ *
+ * The mobile preset is a superset of this and is applied on top of it.
+ */
+export const BASE_PRESET: SplatQuality = {
+  radialSorting: true,
+  colorUpdateAngle: 30,
+};
+
+/**
+ * The colorUpdateAngle used while a fly-in is in the air. tan(89.9°) ≈ 573
+ * units — 190 m at 3 units/m — so no translation a fly-in can make reaches
+ * the threshold, and the accumulated distance simply carries over: the engine
+ * adds each frame's translation to a running total and bakes when the total
+ * crosses tan(angle), so restoring the real angle on the arrival frame (which
+ * itself moves the camera by the last easing step) bakes exactly once, there.
+ * See SplatQualityControl.suspendColorBake().
+ */
+const FLIGHT_BAKE_ANGLE = 89.9;
+
 export class SplatQualityControl {
   private app: AppBase;
   private webgpu: boolean;
+  /* The colorUpdateAngle to put back when a fly-in lands; null when no hold is
+     in effect. apply() writes here instead of the engine while a hold is on,
+     so a console __splat({colorUpdateAngle}) mid-flight is not clobbered by
+     the resume. */
+  private heldAngle: number | null = null;
 
   constructor(app: AppBase, renderer: string) {
     this.app = app;
     this.webgpu = renderer === 'webgpu';
+  }
+
+  /**
+   * Stop colour re-bakes for the duration of a fly-in.
+   *
+   * WHY: a fly-in translates the camera metres in 1.3-1.6 s. At the mobile
+   * preset's 30° the engine re-bakes every 19 cm of travel, so a 4 m fly-in
+   * bakes the whole cloud ~20 times in a second and a half — on the phone,
+   * every one of those is a full SH pass over 1.6M splats competing with the
+   * frame. The iPhone 18 Pro recording of 2026-09-01 holds 60 fps in free roam
+   * and drops to 36-52 fps, with 60-94 ms worst frames, in exactly the windows
+   * where a hero fly-in or fly-home is in flight. What goes stale during the
+   * hold is only the view-dependent specular component, on a picture that is
+   * moving too fast to read it.
+   *
+   * Idempotent; pair with resumeColorBake(). The caller MUST resume on every
+   * way a flight can end — arrival, interruption by the visitor, scene swap —
+   * so main.ts resumes from onArrive, onUserInteract and exitCloseupUI.
+   */
+  suspendColorBake(): void {
+    const g = this.app.scene.gsplat;
+    if (this.heldAngle !== null) return;
+    this.heldAngle = g.colorUpdateAngle;
+    g.colorUpdateAngle = FLIGHT_BAKE_ANGLE;
+  }
+
+  /** Restore the real colorUpdateAngle. The bake that was owed fires on the next moving frame. */
+  resumeColorBake(): void {
+    if (this.heldAngle === null) return;
+    this.app.scene.gsplat.colorUpdateAngle = this.heldAngle;
+    this.heldAngle = null;
+  }
+
+  /** True while a fly-in is holding colour re-bakes off. */
+  get bakeHeld(): boolean {
+    return this.heldAngle !== null;
   }
 
   /** Which knobs actually do something on the device that booted. */
@@ -303,7 +383,12 @@ export class SplatQualityControl {
     if (q.foveationStrength !== undefined) g.foveationStrength = q.foveationStrength;
     if (q.foveationCenter !== undefined) g.foveationCenter = q.foveationCenter;
     if (q.radialSorting !== undefined) g.radialSorting = q.radialSorting;
-    if (q.colorUpdateAngle !== undefined) g.colorUpdateAngle = q.colorUpdateAngle;
+    if (q.colorUpdateAngle !== undefined) {
+      // Mid-flight the engine holds FLIGHT_BAKE_ANGLE; the new value waits for
+      // the resume rather than ending the hold early.
+      if (this.heldAngle !== null) this.heldAngle = q.colorUpdateAngle;
+      else g.colorUpdateAngle = q.colorUpdateAngle;
+    }
     // Last, and only on a real change: see the shader-recompile note above.
     if (q.antiAlias !== undefined && q.antiAlias !== g.antiAlias) g.antiAlias = q.antiAlias;
   }
@@ -325,7 +410,9 @@ export class SplatQualityControl {
       foveationStrength: g.foveationStrength,
       foveationCenter: g.foveationCenter,
       radialSorting: g.radialSorting,
-      colorUpdateAngle: g.colorUpdateAngle,
+      // The value that is in force between flights, not the flight hold.
+      colorUpdateAngle: this.heldAngle ?? g.colorUpdateAngle,
+      bakeHeld: this.heldAngle !== null,
       antiAlias: g.antiAlias,
     };
   }
