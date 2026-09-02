@@ -1087,3 +1087,210 @@ body.phone #stage-exit.revealed {
    that filled bluedio.html's hero would overflow it. */
 body.phone .poster .roomname { font-size: 34px; }
 body.phone .poster .kicker { font-size: 10.5px; }
+
+/* ===========================================================================
+   THE DOCKED PAGE, TURNED SIDEWAYS — landscape on bluedio-phone.html
+   ---------------------------------------------------------------------------
+   Upright, the scene is a square window with the controls in a strip beneath
+   it. Sideways there is no room beneath anything: a 874x403 viewport holding a
+   1:1 window leaves a 471px-wide dock beside 403px of picture, or a 74svh
+   window with a 105px strip under it. Neither is a layout. What a landscape
+   phone wants is the FULL-BLEED page's arrangement — the picture edge to edge,
+   the pads in the two bottom corners — and this block produces exactly that
+   without moving a single DOM node.
+
+   HOW, AND WHY NOT BY RE-PARENTING. phonedock.ts moved four elements into
+   #phone-dock at mount and is explicit that the move is a property of the
+   PAGE, never of the viewport: re-parenting on rotation would tear listeners'
+   assumptions (TEMPLATE.md gotcha 14 is a list of what broke the last time
+   chrome changed ancestor). So the dock stays the parent of everything it
+   owns and simply changes WHERE IT IS: pinned over the window, transparent to
+   input except for its occupants. The window goes full-bleed underneath it.
+   Every rule here is a positioning or paint override on elements that are
+   already in the right place in the tree.
+
+   THE CONDITION IS `(orientation: landscape) and (max-height: 560px)` — "a
+   short landscape viewport", which every phone on its side is and which a
+   laptop window can be squashed into for review. Not a width test (a width
+   cannot tell a wide screen from a phone turned sideways — the trap gotcha 12
+   and gotcha 14 both record) and not `pointer: coarse` (which would hide the
+   layout from the review pass). phonedock.ts carries the SAME string as
+   PHONE_LANDSCAPE_QUERY for the hero lift and the render resolution; the two
+   copies must stay identical.
+
+   THE PADS ARE 10% SMALLER HERE (116 -> 104px, knob 42 -> 38) and go back to
+   the ghostly overlay treatment, because they are over the photograph again —
+   the light fill they carry in the dock was a correction for a flat ground
+   that no longer applies. Same for the cards and the i/points row: glass
+   over the picture, the way the full-bleed page paints them.
+
+   Specificity: everything below uses the same `body.phone #phone-dock ...`
+   selectors the docked block uses, placed AFTER it — so source order decides,
+   and nothing here needs to out-rank anything. Keep this block last.
+   =========================================================================== */
+@media (orientation: landscape) and (max-height: 560px) {
+  /* The laptop review column (min-width: 560px and pointer: fine) gives way:
+     a short landscape window IS this layout, and it wants the full width. */
+  .phone-shell {
+    width: auto;
+    margin: 0;
+    border: 0;
+  }
+
+  /* The window fills the viewport. `aspect-ratio: auto` and `max-height: none`
+     retire both the shape knob (--viewer-aspect / ?win) and the two dock caps,
+     since there is no dock height to protect. */
+  body.phone .viewer-window.ratio-4x3 {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    max-height: none;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  /* The dock becomes an overlay: same box as the window, inert to input so
+     the canvas underneath still takes every drag and tap. Its occupants
+     re-enable pointer-events for themselves — the pads already do, the cards
+     already do (`.open` only), the controls row is done below. pointer-events
+     INHERITS, so anything added to the dock later must opt back in. */
+  body.phone #phone-dock {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
+    pointer-events: none;
+  }
+
+  /* Poster-time hint moves under the poster's copy instead of over it. */
+  body.phone #phone-dock .phone-hint {
+    left: 15%;
+    right: 15%;
+    top: auto;
+    bottom: max(22px, env(safe-area-inset-bottom));
+    transform: none;
+    font-size: 13px;
+  }
+
+  /* The pad layer stops being a centred flex row and becomes the whole
+     overlay, with each pad absolutely placed in its corner. */
+  body.phone #phone-dock #touch-controls {
+    inset: 0;
+    top: 0;
+    bottom: 0;
+    height: auto;
+    display: block;
+  }
+  body.phone #phone-dock .stick {
+    position: absolute;
+    top: auto;
+    /* The home indicator sits at the bottom centre in landscape and the notch
+       on one side; env() keeps the pads off both, and falls back to a plain
+       inset where the browser does not report insets. */
+    bottom: max(20px, env(safe-area-inset-bottom));
+    width: 104px; /* 116 * 0.9 — the docked pad, 10% smaller */
+    height: 104px;
+    /* Back to the overlay treatment (the base rule in controls.css): two
+       strokes, light over dark and a dark ring under it, legible over a
+       photograph at a low alpha without reading as furniture. */
+    opacity: 0.55;
+    border-color: rgba(242, 237, 229, 0.22);
+    background: rgba(20, 16, 12, 0.14);
+    box-shadow: 0 0 0 1px rgba(20, 16, 12, 0.22);
+  }
+  body.phone #phone-dock .stick.active {
+    opacity: 0.92;
+    border-color: rgba(242, 237, 229, 0.5);
+  }
+  body.phone #phone-dock .stick-left {
+    left: max(20px, env(safe-area-inset-left));
+    right: auto;
+  }
+  body.phone #phone-dock .stick-right {
+    right: max(20px, env(safe-area-inset-right));
+    left: auto;
+  }
+  body.phone #phone-dock .stick-knob {
+    width: 38px; /* 42 * 0.9 */
+    height: 38px;
+  }
+  /* Pinned to opposite corners the rings can never meet, so the slop returns
+     to the base rule's -20px (the dock's -12px existed because its pads were
+     centred and could overlap on a 320px phone). */
+  body.phone #phone-dock .stick::before {
+    inset: -20px;
+  }
+
+  /* The i / points row: bottom centre, between the pads. Bottom-left is a
+     thumb pad now, and the top-left belongs to the perf HUD. Explicit
+     pointer-events, because the dock above set none and it inherits. */
+  body.phone #phone-dock #stage-controls {
+    left: 50%;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+  body.phone #phone-dock .stage-ctl {
+    background: var(--glass);
+    border-color: var(--shell-line);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+  }
+
+  /* The hero card: the desktop's bottom bar, on glass, arrows outside. 44% of
+     a ~400px frame is ~175px, so most of Bluedio's cards scroll here — the
+     trade for keeping the subject in view; main.ts lifts it 0.15 of the frame
+     to clear the bar (see refreshHeroFraming). The × stays top-left as in the
+     dock, so the gesture a visitor learned upright still works sideways. */
+  body.phone #phone-dock #hero-card,
+  body.phone #phone-dock #hero-card.bottom {
+    top: auto;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    width: min(560px, calc(100% - 128px)); /* 64px a side: a 36px arrow plus air */
+    max-width: none;
+    max-height: 44%;
+    transform: translate(-50%, 24px);
+    border-radius: var(--radius);
+    background: var(--glass-strong);
+    border-color: var(--shell-line);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+  }
+  body.phone #phone-dock #hero-card.open,
+  body.phone #phone-dock #hero-card.bottom.open {
+    transform: translate(-50%, 0);
+  }
+  /* The stepper's glass discs come back: over a live splat they earn their
+     keep (the docked block dropped them for the dock's flat ground). */
+  body.phone #phone-dock .hero-card-nav,
+  body.phone #phone-dock .hero-card-nav:hover {
+    background: rgba(20, 16, 12, 0.425);
+    border-color: var(--shell-line);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+  }
+
+  /* The help card: a centred panel of readable width rather than a strip the
+     full 874px across. */
+  body.phone #phone-dock #info-card {
+    left: 50%;
+    right: auto;
+    width: min(440px, calc(100% - 28px));
+    max-height: calc(100% - 28px);
+    transform: translate(-50%, calc(-50% + 10px));
+    border-radius: var(--radius);
+    background: var(--glass-strong);
+    border-color: var(--shell-line);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+  }
+  body.phone #phone-dock #info-card.open {
+    transform: translate(-50%, -50%);
+  }
+
+  /* The summoned × clears a right-hand notch. */
+  body.phone #stage-exit {
+    right: max(14px, env(safe-area-inset-right));
+  }
+}

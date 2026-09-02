@@ -9,6 +9,13 @@
 
    Why DOM instead of in-scene 3D text: crisp typography, trivial styling, and
    perfect accessibility — the splat stays pure geometry, the labels stay HTML.
+
+   TWO WAYS TO PICK A DOT, BY POINTER TYPE. A mouse clicks the marker element
+   itself: it is precise, it gets the hover caption, and the 22px dot is a fine
+   target for a cursor. A FINGER does not go through the element at all —
+   markers.css makes every marker inert under `(pointer: coarse)` — and the
+   canvas resolves its tap against the projected dot positions by distance
+   (hitTest, driven from main.ts via the camera's onTap). See hitTest for why.
    ========================================================================== */
 
 import { Entity, Vec3 } from 'playcanvas';
@@ -18,6 +25,11 @@ interface Marker {
   hero: HeroPoint;
   el: HTMLElement;
   anchor: Vec3;
+  /* Where the dot was last drawn, in the canvas's CSS pixels — the same numbers
+     written to left/top — so a tap can be resolved without re-projecting. */
+  sx: number;
+  sy: number;
+  onScreen: boolean;
 }
 
 export class HeroPointManager {
@@ -63,7 +75,14 @@ export class HeroPointManager {
       el.innerHTML = `${dot}<span class="hero-caption">${hero.caption}</span>`;
       el.addEventListener('click', () => this.onSelect?.(hero));
       this.layer.appendChild(el);
-      this.markers.push({ hero, el, anchor: new Vec3(a[0], a[1], a[2]) });
+      this.markers.push({
+        hero,
+        el,
+        anchor: new Vec3(a[0], a[1], a[2]),
+        sx: 0,
+        sy: 0,
+        onScreen: false,
+      });
     }
   }
 
@@ -103,25 +122,62 @@ export class HeroPointManager {
     if (!this.cam.camera) return;
     if (this.shown) {
       for (const m of this.markers) {
-        if (m.hero === this.hiddenHero) {
-          m.el.style.opacity = '0';
-          m.el.style.pointerEvents = 'none';
-          continue;
+        /* Parked when it is the hero being viewed up close, or when the point is
+           behind the camera (z <= 0). A CLASS, not inline opacity/pointer-events
+           as it used to be: an inline `pointer-events: auto` rewritten here every
+           frame outranks any stylesheet, which would silently undo the rule in
+           markers.css that makes the dots inert to a finger. The stylesheet has
+           to keep the last word on hit-testing, so this only names the state. */
+        let off = m.hero === this.hiddenHero;
+        if (!off) {
+          this.cam.camera.worldToScreen(m.anchor, this.screen);
+          off = this.screen.z <= 0;
         }
-        this.cam.camera.worldToScreen(m.anchor, this.screen);
-        // z <= 0 means the point is behind the camera — hide it.
-        if (this.screen.z <= 0) {
-          m.el.style.opacity = '0';
-          m.el.style.pointerEvents = 'none';
-          continue;
-        }
-        m.el.style.opacity = '1';
-        m.el.style.pointerEvents = 'auto';
-        m.el.style.left = `${this.screen.x}px`;
-        m.el.style.top = `${this.screen.y}px`;
+        m.el.classList.toggle('offscreen', off);
+        m.onScreen = !off;
+        if (off) continue;
+        m.sx = this.screen.x;
+        m.sy = this.screen.y;
+        m.el.style.left = `${m.sx}px`;
+        m.el.style.top = `${m.sy}px`;
       }
     }
     this.updateAnchoredCard();
+  }
+
+  /**
+   * The hero whose dot is nearest to a point on the canvas, within `radius`
+   * CSS pixels — or null. `x`/`y` are relative to the canvas's top-left, the
+   * space worldToScreen() projects into (the engine divides by the device's
+   * clientRect), which is also the space the markers are positioned in.
+   *
+   * WHY A DISTANCE TEST AND NOT THE ELEMENT'S OWN HIT BOX. The dot is 22 CSS px:
+   * on a 403px-wide phone that is about 3.6 mm, against the ~7 mm a thumb
+   * actually lands within. So most taps aimed at a dot landed beside it, on the
+   * canvas, and became a zero-length drag that did nothing — "the points don't
+   * respond". Growing the element's box would fix the miss but create a worse
+   * bug: in a close-up the OTHER dots are still on screen, and a drag that
+   * starts on any of their enlarged boxes would be eaten instead of orbiting.
+   * Resolving on the canvas keeps every gesture where it is — a drag from a dot
+   * still orbits — and only a TAP, which is not a drag, asks "which dot?".
+   *
+   * Nearest wins so two dots inside one radius (the LA-3A under the Neve, say)
+   * still pick deterministically. Respects both visibility gates and skips the
+   * hero already in close-up, exactly as the marker's own click did.
+   */
+  hitTest(x: number, y: number, radius: number): HeroPoint | null {
+    if (!this.shown) return null;
+    let best: HeroPoint | null = null;
+    let bestD = radius * radius;
+    for (const m of this.markers) {
+      if (!m.onScreen) continue;
+      const d = (m.sx - x) ** 2 + (m.sy - y) ** 2;
+      if (d <= bestD) {
+        bestD = d;
+        best = m.hero;
+      }
+    }
+    return best;
   }
 
   /** Keep the anchored card pinned beside its 3D point, clamped on-screen. */

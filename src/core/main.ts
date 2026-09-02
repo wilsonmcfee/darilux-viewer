@@ -39,8 +39,30 @@ import { TouchSticks, wantsTouchControls } from '../nav/joystick';
 import { PerfHud } from '../ui/perfhud';
 import { SplatQualityControl, MOBILE_PRESET } from './splatquality';
 import { installKnobs } from './knobs';
-import { mountPhoneDock } from '../ui/phonedock';
+import { mountPhoneDock, isPhoneLandscape, PHONE_LANDSCAPE_QUERY } from '../ui/phonedock';
 import { UI } from '../ui/ui';
+import { targetPixelRatio } from './device';
+
+/* The two mobile sharpness scales, named once because the docked page uses
+   BOTH in one session (see the ResizeObserver). Each multiplies a ratio already
+   capped at 1080 physical pixels across the panel's short axis — SuperSplat's
+   model, adopted verbatim in device.ts — so on a 390x844 DPR-3 phone:
+
+     0.5   -> 1.385   SuperSplat's own mobile default; the full-bleed canvas
+     0.75  -> 2.077   the docked window, which is ~35% of the screen's area
+
+   Same frame cost, spent on area or on sharpness. */
+const FULLBLEED_PERF_SCALE = 0.5;
+const DOCKED_PERF_SCALE = 0.75;
+
+/* How far, in CSS px, a finger may land from a hero dot's centre and still pick
+   it. A thumb lands within roughly 7 mm of where it is aimed; at the ~5.7 CSS
+   px/mm of a 403px-wide phone, 30px is a little over 5 mm of radius — a 10 mm
+   target around a 22px dot that is itself under 4 mm. Nearest dot wins inside
+   it, so two close dots still pick deterministically. See
+   HeroPointManager.hitTest for why the tap is resolved here and not by the dot's
+   own element. */
+const TOUCH_HERO_RADIUS = 30;
 
 /* Authoring is a TOOL, not a viewer feature, and it is gated at BUILD time as
    well as at runtime: with this false, the dynamic import below is dead code,
@@ -224,18 +246,32 @@ export function createViewer(opts: ViewerOptions): Viewer {
    * Called from the same places as refreshSticks(), including on resize, so a
    * phone rotating or a window crossing the breakpoint re-decides it.
    *
-   * THE DOCKED PHONE PAGE GETS 0, and it is worth saying why rather than
-   * treating it as one more special case. The lift is a workaround for a card
-   * that covers the middle of the frame; on bluedio-phone.html the card is not
-   * in the frame at all, it is in the strip underneath. So the workaround has
-   * nothing to work around, and turning it off restores every hero pose to the
-   * framing that was actually authored — a small, free quality win that comes
-   * out of the layout rather than out of any tuning.
+   * THE DOCKED PHONE PAGE GETS 0 IN PORTRAIT, and it is worth saying why rather
+   * than treating it as one more special case. The lift is a workaround for a
+   * card that covers the middle of the frame; on bluedio-phone.html upright the
+   * card is not in the frame at all, it is in the strip underneath. So the
+   * workaround has nothing to work around, and turning it off restores every
+   * hero pose to the framing that was actually authored — a small, free quality
+   * win that comes out of the layout rather than out of any tuning.
+   *
+   * TURNED SIDEWAYS, THE SAME PAGE GETS A SMALLER LIFT. Landscape puts the card
+   * back over the picture as a bottom bar, on a frame only ~400px tall, so the
+   * bar's top edge sits at roughly 56% of the frame — right where a fly-in
+   * parks its subject. 0.15 puts the subject at 35%, clear of the bar; the
+   * portrait 0.27 would push it to 23% of a frame this short, hard against the
+   * ceiling with a dead band above the card. It applies whenever the landscape
+   * arrangement is live, touch or not: it is the CARD's position that the lift
+   * answers to, and a laptop reviewing the layout has the same card in the
+   * same place. Not driven by ?lift, which tunes the portrait card.
    */
+  const LANDSCAPE_HERO_LIFT = 0.15;
+
   function refreshHeroFraming(): void {
     if (!controller) return;
-    const cardOverScene = !phoneDock && (stickOverride ?? wantsTouchControls());
-    controller.setHeroFrameLift(cardOverScene ? heroLift : 0);
+    let lift = 0;
+    if (!phoneDock && (stickOverride ?? wantsTouchControls())) lift = heroLift;
+    else if (phoneDock && isPhoneLandscape()) lift = LANDSCAPE_HERO_LIFT;
+    controller.setHeroFrameLift(lift);
   }
 
   const ui = new UI(scenes, {
@@ -292,7 +328,11 @@ export function createViewer(opts: ViewerOptions): Viewer {
      observer still owns the case this cannot see, which is the stage being
      reparented between two differently-sized windows at one viewport size. */
   const mqDisposers: Array<() => void> = [];
-  for (const q of ['(max-width: 820px)', '(pointer: coarse)']) {
+  // The landscape query is in the list for the hero lift: on the docked page a
+  // rotation also resizes the stage, so the observer would catch it too, but a
+  // laptop window dragged across the height threshold at a fixed stage size
+  // would not — the same shape of gap the 820px clause closes.
+  for (const q of ['(max-width: 820px)', '(pointer: coarse)', PHONE_LANDSCAPE_QUERY]) {
     const mq = window.matchMedia?.(q);
     // addEventListener on MediaQueryList is Safari 14+; addListener is the
     // fallback for the older WKWebView this project explicitly still targets.
@@ -344,7 +384,7 @@ export function createViewer(opts: ViewerOptions): Viewer {
        That trade is the entire performance argument for the docked layout.
        Override either page with ?perf=N, or the final ratio with ?res=N. */
     const { device, renderer } = await createDevice(canvas, {
-      perfScale: phoneDock ? 0.75 : 0.5,
+      perfScale: phoneDock ? DOCKED_PERF_SCALE : FULLBLEED_PERF_SCALE,
     });
 
     // The canvas is sized by its host window (CSS 100%), not the browser window:
@@ -394,6 +434,26 @@ export function createViewer(opts: ViewerOptions): Viewer {
     };
     heroes = new HeroPointManager(camera, document.getElementById('hero-layer')!);
     heroes.onSelect = (hero) => selectHero(hero);
+
+    /* ---- A finger's tap on the canvas picks the nearest hero dot -------------
+       On a coarse pointer the marker elements are inert (markers.css) and the
+       canvas owns every gesture, tap included; the tap is matched against the
+       projected dots by distance. A mouse is excluded here because it never
+       needs this — it clicks the dot element itself, precisely, with the hover
+       caption — and a click on empty canvas near a dot should stay a click on
+       empty canvas for a pointer that can tell the difference.
+
+       preventDefault() is the signal "this tap was spent": phonedock's × reveal
+       listens on #stage, runs after the camera's canvas-level pointerup, and
+       reads the flag rather than summoning the exit over a fly-in. */
+    controller.onTap = (e) => {
+      if (e.pointerType === 'mouse') return;
+      const r = canvas.getBoundingClientRect();
+      const hero = heroes?.hitTest(e.clientX - r.left, e.clientY - r.top, TOUCH_HERO_RADIUS);
+      if (!hero) return;
+      e.preventDefault();
+      selectHero(hero);
+    };
 
     // ---- Touch thumb sticks --------------------------------------------------
     // Built once alongside the camera, then shown or hidden by refreshSticks().
@@ -566,6 +626,22 @@ export function createViewer(opts: ViewerOptions): Viewer {
       // textures and every subsequent frame submits an invalid command
       // buffer — the console spam that drags the whole page down. Skip it.
       if (!stage.clientWidth || !stage.clientHeight) return;
+      /* The docked page paints two very different canvases in one session: the
+         square window upright, and the whole screen turned sideways — about
+         2.3x the CSS area. Render resolution was a per-PAGE constant because the
+         page decided the canvas's share of the screen; now the orientation
+         does, so the same area argument is applied on the same event. Landscape
+         takes the full-bleed page's scale, portrait keeps the docked one, and
+         it is set BEFORE resizeCanvas because that call is what sizes the
+         backing store from maxPixelRatio. ?res and ?perf still win — they are
+         folded in by targetPixelRatio(). Every other page keeps its boot-time
+         value. */
+      if (phoneDock && app) {
+        app.graphicsDevice.maxPixelRatio = Math.min(
+          window.devicePixelRatio,
+          targetPixelRatio(isPhoneLandscape() ? FULLBLEED_PERF_SCALE : DOCKED_PERF_SCALE),
+        );
+      }
       app?.resizeCanvas(stage.clientWidth, stage.clientHeight);
       // The viewport shape changed (rotation / reparenting into another
       // window) — re-apply the camera so its aspect-compensated fov tracks it.

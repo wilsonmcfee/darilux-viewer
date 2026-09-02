@@ -109,6 +109,32 @@ function defaultPixelRatio(perfScale: number): number {
   return Math.max(1, capped * perfScale);
 }
 
+/**
+ * The render pixel ratio a page should run at for a given mobile scale, with
+ * the two URL overrides applied (see the note at the point of use in
+ * createDevice for what each one is for). Exported because the docked phone
+ * page has TWO canvases in one session — the square window, and the full
+ * screen when the phone is turned sideways — and re-decides this on the
+ * resize that flips between them (main.ts). The desktop answer is unaffected:
+ * `defaultPixelRatio` returns 2 there regardless of the scale.
+ */
+export function targetPixelRatio(perfScale: number): number {
+  const params = new URLSearchParams(window.location.search);
+
+  const perfRaw = params.get('perf');
+  const perfParam = Number(perfRaw);
+  const scale =
+    perfRaw !== null && Number.isFinite(perfParam) && perfParam > 0
+      ? Math.min(perfParam, 2)
+      : perfScale;
+
+  const resRaw = params.get('res');
+  const resParam = Number(resRaw);
+  return resRaw !== null && Number.isFinite(resParam) && resParam > 0
+    ? Math.min(resParam, 4)
+    : defaultPixelRatio(scale);
+}
+
 export async function createDevice(
   canvas: HTMLCanvasElement,
   opts: DeviceOptions = {},
@@ -211,23 +237,7 @@ export async function createDevice(
      Both read NaN-safely and clamped: a typo must not produce a zero-sized
      swapchain (see the ResizeObserver note in main.ts about what a 0x0 surface
      does to WebGPU). */
-  const params = new URLSearchParams(window.location.search);
-
-  const perfRaw = params.get('perf');
-  const perfParam = Number(perfRaw);
-  const perfScale =
-    perfRaw !== null && Number.isFinite(perfParam) && perfParam > 0
-      ? Math.min(perfParam, 2)
-      : (opts.perfScale ?? 0.5);
-
-  const resRaw = params.get('res');
-  const resParam = Number(resRaw);
-  const targetRatio =
-    resRaw !== null && Number.isFinite(resParam) && resParam > 0
-      ? Math.min(resParam, 4)
-      : defaultPixelRatio(perfScale);
-
-  device.maxPixelRatio = Math.min(window.devicePixelRatio, targetRatio);
+  device.maxPixelRatio = Math.min(window.devicePixelRatio, targetPixelRatio(opts.perfScale ?? 0.5));
 
   const renderer: DeviceResult['renderer'] = device.isWebGPU ? 'webgpu' : 'webgl2';
   // Decided behavior: fall back SILENTLY (no "compatibility mode" label to the

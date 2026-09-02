@@ -62,6 +62,31 @@ export function isPhoneDock(): boolean {
 }
 
 /**
+ * The docked page's LANDSCAPE arrangement — the condition, as one string.
+ *
+ * Turning the phone sideways does NOT un-dock the page (see isPhoneDock: the
+ * controls stay in #phone-dock, nothing is re-parented on a rotation). What
+ * changes is purely where the dock IS: stage.css lays the dock over the scene
+ * as a transparent overlay, the window goes full-bleed, and the pads sit in
+ * the two bottom corners — the full-bleed page's arrangement, reached without
+ * moving a single node. CSS keys off this query directly; the TypeScript side
+ * needs the same answer for the hero framing lift and the render resolution,
+ * so the string lives here and stage.css carries a copy. KEEP THEM IDENTICAL.
+ *
+ * `max-height`, not `pointer: coarse`: the condition is "a short landscape
+ * viewport", which every phone on its side is and which a laptop window can be
+ * made into for review. 560px clears the tallest phone in landscape (a Pro Max
+ * is ~440 CSS px tall there) and stays well under any tablet or laptop window
+ * left at a normal size.
+ */
+export const PHONE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 560px)';
+
+/** Is the docked page currently in its landscape arrangement? */
+export function isPhoneLandscape(): boolean {
+  return isPhoneDock() && (window.matchMedia?.(PHONE_LANDSCAPE_QUERY).matches ?? false);
+}
+
+/**
  * Move the control chrome out of the stage and into the dock beneath it.
  *
  * Must run AFTER mountChrome() (the elements do not exist before it) and is
@@ -148,6 +173,12 @@ function installExitReveal(): void {
     const held = performance.now() - down.t;
     down = null;
     if (travelled > TAP_SLOP_PX || held > TAP_MAX_MS) return; // a drag or a hold
+    // A tap the canvas has already spent — main.ts resolved it to a hero dot
+    // and marked the event consumed — asked for a close-up, not for the exit.
+    // The camera's canvas-level pointerup runs before this stage-level one, so
+    // the flag is set by the time it is read here. After `down` is cleared, so
+    // the detector is never left armed.
+    if (e.defaultPrevented) return;
     const r = stage.getBoundingClientRect();
     if (e.clientY - r.top > r.height * EXIT_REVEAL_ZONE) return; // not up top
     exit.classList.add('revealed');

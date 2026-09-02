@@ -27,6 +27,33 @@
   display: block;
   transition: opacity 0.25s var(--ease);
 }
+/* Parked: behind the camera, or the hero currently in close-up. heropoints.ts
+   toggles the class every frame. A class rather than the inline styles it
+   replaced, so the coarse-pointer rule below cannot be undone by a per-frame
+   inline write — inline always outranks a stylesheet. */
+.hero-marker.offscreen {
+  opacity: 0;
+  pointer-events: none;
+}
+/* ---- On a touch screen the dots are a PICTURE; the canvas takes the tap -----
+   The marker element is 22px, about 3.6 mm on a 403px phone. A thumb lands
+   within ~7 mm of where it is aimed, so most taps at a dot missed the element
+   and hit the canvas — a zero-length drag, which does nothing. Rather than grow
+   the element (which would let it steal orbit drags in a close-up, where the
+   other dots are still on screen) the markers are made inert to a coarse
+   pointer and the canvas resolves every tap against the projected dot
+   positions by distance: HeroPointManager.hitTest(), wired in main.ts through
+   the camera's onTap. One gesture owner, a hit radius that is a number rather
+   than a box, and a drag that starts on a dot still orbits.
+
+   Mouse users are untouched: a cursor is precise, the hover caption still
+   works, and the click path is the same one it always was. */
+@media (pointer: coarse) {
+  .hero-marker {
+    pointer-events: none;
+    cursor: default;
+  }
+}
 .hero-dot {
   display: block; /* no longer a flex item, so it must blockify itself */
   width: 22px;

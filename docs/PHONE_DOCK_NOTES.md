@@ -165,9 +165,20 @@ answered.*
   `lodBehindPenalty`, all no-ops on a flat SOGS bundle. If the editor builds an
   octree on upload, that is a *structural* advantage this viewer does not have
   and it is the remaining unexplained part of the comparison.
-- **Landscape on the docked page** falls back to the same rules as everything
-  else: the window keeps its aspect and caps at 74svh so the dock survives. Not
-  designed for, not broken.
+- ~~**Landscape on the docked page** falls back to the same rules as everything
+  else~~ **DESIGNED, 2026-09-01.** Sideways, the dock becomes a transparent
+  overlay over a full-bleed window — the full-bleed page's arrangement with no
+  re-parenting (the `isPhoneDock` invariant holds). Pads in the bottom corners
+  at 90% size, i/points bottom-centre, hero card as a bottom bar with a 0.15
+  lift, render ratio dropped to the full-bleed scale for the ~2.3x canvas. The
+  block is at the end of `stage.css`; the query is `PHONE_LANDSCAPE_QUERY` in
+  `phonedock.ts`. Not yet judged on the device.
+- **Hero dots on touch, same date.** The 22px dot was the "points don't
+  respond" report: ~3.6 mm on a phone against a ~7 mm thumb landing, so taps
+  missed the element and became zero-length drags. Markers are now inert under
+  `pointer: coarse` and the canvas resolves a tap to the nearest dot within
+  30px (`HeroPointManager.hitTest`, via the camera's `onTap`). Needs the
+  device to confirm.
 - The full-bleed `bluedio.html` is **unchanged structurally** and still the more
   immersive page on a fast phone. Keeping both means choosing is a link, not a
   revert.

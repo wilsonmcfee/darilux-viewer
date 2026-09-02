@@ -58,6 +58,15 @@ const HERO_LIFT_TAU = 0.35;
 const MOVE_EPS = 1e-4;
 const ANGLE_EPS = 1e-3;
 
+/* A canvas TAP — one finger, down and up within this much travel and this much
+   time — is a gesture of its own, sharing only its first event with a drag.
+   The camera detects it and reports it through onTap; it does not decide what a
+   tap means (main.ts resolves it against the hero dots). The numbers match the
+   × reveal in phonedock.ts, so the two tap detectors on this canvas agree about
+   what a tap is. */
+const TAP_SLOP_PX = 12;
+const TAP_MAX_MS = 400;
+
 export class OrbitFlyCamera {
   private cam: Entity;
   private canvas: HTMLCanvasElement;
@@ -170,6 +179,10 @@ export class OrbitFlyCamera {
   // Pointer bookkeeping (supports mouse drag + touch orbit/pinch/pan).
   private pointers = new Map<number, { x: number; y: number }>();
   private lastPinchDist = 0;
+  /* The press that may still turn out to be a tap: cleared the moment it
+     travels past the slop, gains a second finger, or is cancelled. Null means
+     "whatever is happening, it is not a tap". */
+  private tap: { x: number; y: number; t: number; id: number } | null = null;
 
   /* ---- Analog touch sticks (joystick.ts) ---------------------------------
      Both axes are held in SCREEN space — x right, y down — so they are the same
@@ -210,6 +223,13 @@ export class OrbitFlyCamera {
 
   // Callback so the UI can react when the visitor takes over (e.g. show "Exit").
   onUserInteract?: () => void;
+  /**
+   * A tap on the canvas (see TAP_SLOP_PX). Receives the pointerup so the
+   * handler can read the position and pointer type, and can call
+   * preventDefault() to mark the tap as spent — stage-level listeners further
+   * up the bubble (phonedock's × reveal) read that flag and stand down.
+   */
+  onTap?: (e: PointerEvent) => void;
 
   constructor(cameraEntity: Entity, canvas: HTMLCanvasElement) {
     this.cam = cameraEntity;
@@ -765,8 +785,18 @@ export class OrbitFlyCamera {
     const c = this.canvas;
     c.addEventListener('pointerdown', this.onPointerDown, { passive: false });
     c.addEventListener('pointermove', this.onPointerMove, { passive: false });
+    /* pointerup on the CANVAS as well as on the window. With pointer capture
+       the release is delivered to the canvas and bubbles to the window, so the
+       same handler runs twice — harmlessly: dropping a pointer is idempotent and
+       the tap is consumed by the first call. What the canvas registration buys
+       is ORDER. The tap fires before any stage-level listener sees the event,
+       so a tap that picks a hero can mark itself spent (preventDefault) and
+       phonedock's × reveal, listening on #stage, can stand down. The window
+       registration stays as the backstop for a release that arrives without
+       capture. A cancel is never a tap, hence its own handler. */
+    c.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('pointerup', this.onPointerUp);
-    window.addEventListener('pointercancel', this.onPointerUp);
+    window.addEventListener('pointercancel', this.onPointerCancel);
     c.addEventListener('wheel', this.onWheel, { passive: false });
     c.addEventListener('touchmove', this.preventNativeGesture, { passive: false });
     c.addEventListener('gesturestart', this.preventNativeGesture);
@@ -785,8 +815,9 @@ export class OrbitFlyCamera {
     const c = this.canvas;
     c.removeEventListener('pointerdown', this.onPointerDown);
     c.removeEventListener('pointermove', this.onPointerMove);
+    c.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('pointerup', this.onPointerUp);
-    window.removeEventListener('pointercancel', this.onPointerUp);
+    window.removeEventListener('pointercancel', this.onPointerCancel);
     c.removeEventListener('wheel', this.onWheel);
     c.removeEventListener('touchmove', this.preventNativeGesture);
     c.removeEventListener('gesturestart', this.preventNativeGesture);
@@ -817,6 +848,7 @@ export class OrbitFlyCamera {
     this.pressedKeys.clear();
     this.pointers.clear();
     this.lastPinchDist = 0;
+    this.tap = null;
   };
 
   /** WASD + Q/E free-fly: translate the orbit target along the view basis. */
@@ -903,13 +935,34 @@ export class OrbitFlyCamera {
     }
     this.canvas.setPointerCapture?.(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // A tap candidate only while this is the sole contact; a second finger
+    // makes the gesture a pinch, and a pinch is never a tap.
+    this.tap =
+      this.pointers.size === 1
+        ? { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId }
+        : null;
     this.interrupt();
   };
 
   private onPointerUp = (e: PointerEvent): void => {
+    this.dropPointer(e);
+    const tap = this.tap;
+    if (!tap || tap.id !== e.pointerId) return;
+    this.tap = null; // consumed — the window-level repeat of this event sees null
+    if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_SLOP_PX) return; // a drag
+    if (performance.now() - tap.t > TAP_MAX_MS) return; // a hold
+    this.onTap?.(e);
+  };
+
+  private onPointerCancel = (e: PointerEvent): void => {
+    this.dropPointer(e);
+    if (this.tap?.id === e.pointerId) this.tap = null;
+  };
+
+  private dropPointer(e: PointerEvent): void {
     this.pointers.delete(e.pointerId);
     if (this.pointers.size < 2) this.lastPinchDist = 0;
-  };
+  }
 
   private onPointerMove = (e: PointerEvent): void => {
     const prev = this.pointers.get(e.pointerId);
@@ -917,8 +970,14 @@ export class OrbitFlyCamera {
     const dx = e.clientX - prev.x;
     const dy = e.clientY - prev.y;
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Past the slop it is a drag for good — a finger that wanders out and back
+    // in must not register as a tap on release.
+    if (this.tap && Math.hypot(e.clientX - this.tap.x, e.clientY - this.tap.y) > TAP_SLOP_PX) {
+      this.tap = null;
+    }
 
     if (this.pointers.size >= 2) {
+      this.tap = null;
       // Two fingers → pinch to zoom + drag to pan.
       const pts = [...this.pointers.values()];
       const pd = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);

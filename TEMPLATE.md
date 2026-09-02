@@ -413,6 +413,26 @@ and the points toggle stay where they are and a left thumb lands on that corner.
 Inset is 35px on the mobile breakpoint and 22px above it — on a tablet the hands
 are further apart, so there the pads want to stay nearer the corners.
 
+**A finger's tap on a hero dot is resolved by the canvas, not by the dot.** Under
+`(pointer: coarse)` the marker elements are inert (`markers.css`) and the camera
+reports taps — one finger, under 12px of travel, under 400 ms — through
+`onTap`; `main.ts` hands the position to `HeroPointManager.hitTest()`, which
+picks the nearest visible dot within 30 CSS px. The 22px dot is ~3.6 mm on a
+phone, and a thumb lands within ~7 mm of its aim, so most taps at a dot used to
+miss it and become a zero-length drag. Growing the element would have let it
+steal orbit drags in a close-up (the other dots stay on screen there); resolving
+the tap on the canvas keeps every drag a drag. A mouse still clicks the element.
+
+**Landscape on the docked page** (`bluedio-phone.html` turned sideways) is the
+full-bleed arrangement without any re-parenting: under `(orientation: landscape)
+and (max-height: 560px)` the dock becomes a transparent overlay on a full-screen
+window, the pads sit in the bottom corners at 90% size (104px), the i/points
+row sits bottom-centre, and the hero card is a bottom bar with a 0.15 lift. The
+render pixel ratio follows the layout too — the full-bleed scale (0.5) sideways,
+the docked scale (0.75) upright — because the canvas is ~2.3x the area. The
+query string lives in `phonedock.ts` as `PHONE_LANDSCAPE_QUERY`, copied
+verbatim into `stage.css`; keep the two identical.
+
 Two things a touch device also changes, both easy to miss:
 
 - **Tooltips are suppressed** under `(hover: none)`. A touch screen fires
@@ -969,6 +989,15 @@ real device, or with the pane visible. See "Gotchas" #13.
     no-op. Use `@supports` instead. Here it would have silently removed the cap
     holding the dock open on any pre-15.4 WKWebView — the exact browser the
     layout targets.
+
+17. **A per-frame inline style beats every stylesheet, so a JS-positioned
+    element cannot be governed by CSS on the property JS writes.**
+    `heropoints.ts` used to write `style.pointerEvents = 'auto'` on every marker
+    every frame, which would have silently undone the `pointer: coarse` rule
+    that makes the dots inert to a finger. State that CSS needs the last word
+    on goes through a class (`.offscreen`), never inline. Companion to the
+    hit-target lesson: a 22px dot is not a touch target, and the fix is a hit
+    radius resolved on the canvas, not a bigger element.
 
 ## A standalone page for one scan
 
