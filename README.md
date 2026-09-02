@@ -97,5 +97,3 @@ The viewer has been aligned to the actual starter output (all three scenes loade
 - **Opening shots for Studio E / common room** — optional; replace `initialPose: null` with an authored pose for a stronger first frame.
 
 ---
-
-*Want a deeper walk-through of any part — the fallback logic, the fly-in math, or the deploy pipeline? Say the word and I'll break it down.*
