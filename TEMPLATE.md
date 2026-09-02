@@ -359,7 +359,8 @@ interesting. Detail in "Performance" below.
 |---|---|
 | `?stats` | frame time / resolution / splat count / sort time readout. `__stats(1)` |
 | `?gl` | force the WebGL2 fallback, to reproduce an older phone at a desk |
-| `?res=N` | override the render pixel ratio outright. `?res=1` = the 2026-08-23 build |
+| `?res=N` | override the render pixel ratio outright, bypassing the budget. `?res=1` = the 2026-08-23 build |
+| `?mpx=N` | the backing-store budget in megapixels (default 2.0; 0 = off, the pre-2026-09-02 native-up-to-DPR-2 desktop). `__mpx(n)` |
 | `?perf=N` | override just the mobile scale. `?perf=0.5` = SuperSplat's default, `?perf=1` = SuperSplat with performance mode off |
 | `?lite=1` | load the reduced 1.6M bundle (`srcMobile`) — the default on phones and on WebGL2 |
 | `?full=1` | force the full 2.53M asset (the default only on a WebGPU desktop) |
@@ -1003,6 +1004,26 @@ then `?stats&pbo=1`, each while walking with W — read `up`. The iPhone:
 `?stats` then `?stats&flybake=1`, tapping a hero and closing it — read `worst`
 and `bake` during the flight. If the fly-in dips survive with `bake --`, the
 hypothesis is wrong and the next suspect is the DOM work at card open/close.
+
+**Addendum, the same afternoon: fullscreen on a desktop is fill-bound, and so
+is SuperSplat.** With everything above in place the desktop still lagged
+fullscreen — and Will ran the same scan in SuperSplat fullscreen and it lagged
+too. Same engine, same asset, same pixels. `?res=0.7` fixed the frame rate
+outright, which settles it: the ceiling is fill.
+
+The desktop rule had been "render native up to DPR 2" with no ceiling on the
+pixel COUNT, so the workload depended entirely on the monitor: 0.9 Mpx in the
+1280x720 window every number above was measured in, 3.7 Mpx on a 1440p
+fullscreen, 8.3 Mpx on 4K or on 1440p at 150% scaling. Nine times the tuned
+fill, plus a GPU sort of 2.53M every frame. No sort or bake knob touches it.
+
+So the backing store now has a **budget of 2.0 Mpx** ("1080p"), applied on
+every resize by scaling the ratio DOWN to `sqrt(budget / cssArea)`, floor 0.5:
+a 1080p monitor renders native, 1440p at 0.74 (the 0.7 judged smooth), 4K at
+0.49. The compositor upscales the rest; splats tolerate that far better than
+polygon edges, and the card, captions and dots are DOM and stay crisp. It never
+binds on the phone layouts, which sit at ~0.6 Mpx already. `?mpx=N` / `__mpx(n)`
+to A/B it, `?mpx=0` for the old behaviour, `?res=N` still wins outright.
 
 **The durable fix is upstream.** Two engine changes would make most of this
 file unnecessary: a `scene.gsplat.sortUpdateDistance` / `sortUpdateAngle` pair

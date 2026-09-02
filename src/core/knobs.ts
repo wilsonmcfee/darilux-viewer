@@ -38,6 +38,9 @@ export interface KnobDeps {
   setOrderUploadPath(p: 'direct' | 'pbo'): void;
   /** Hold colour re-bakes while a fly-in is in the air. */
   setHoldBakeInFlight(on: boolean): void;
+  /** The backing-store budget in megapixels (device.ts); re-decides the ratio and resizes. */
+  setRenderBudget(mpx: number): number;
+  getRenderBudget(): number;
 }
 
 /** Read URL params, apply the ones present, and register the console handles. */
@@ -209,6 +212,16 @@ export function installKnobs(deps: KnobDeps): void {
     deps.setHoldBakeInFlight(Boolean(Number(on)));
   (window as unknown as { __pbo: (on: unknown) => void }).__pbo = (on) =>
     deps.setOrderUploadPath(Number(on) ? 'pbo' : 'direct');
+
+  /* ?mpx=N — the render budget, in megapixels of backing store (device.ts).
+     Parsed in device.ts alongside ?res and ?perf, since all three decide the
+     same number; this is only the console twin. `__mpx()` reports, `__mpx(3)`
+     sets and resizes on the spot, `__mpx(0)` turns the budget off — the
+     pre-2026-09-02 "native up to DPR 2" behaviour, for the A/B. Pair with
+     ?stats and read the Mpx / dpr line, which shows the ratio actually in
+     force rather than the one the monitor would like. */
+  (window as unknown as { __mpx: (n?: number) => number }).__mpx = (n) =>
+    n === undefined ? deps.getRenderBudget() : deps.setRenderBudget(Number(n));
 
   /* ---- The frame-time readout -----------------------------------------
      `?stats` from the URL, `__stats(1)` from a console. The URL form is the

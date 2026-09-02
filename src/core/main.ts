@@ -42,7 +42,7 @@ import { installKnobs } from './knobs';
 import { installSortGate, setOrderUploadPath, type SortGateThresholds } from './gsplatinternals';
 import { mountPhoneDock, isPhoneLandscape, PHONE_LANDSCAPE_QUERY } from '../ui/phonedock';
 import { UI } from '../ui/ui';
-import { targetPixelRatio } from './device';
+import { targetPixelRatio, renderBudgetMpx, setRenderBudgetMpx } from './device';
 
 /* The two mobile sharpness scales, named once because the docked page uses
    BOTH in one session (see the ResizeObserver). Each multiplies a ratio already
@@ -392,6 +392,37 @@ export function createViewer(opts: ViewerOptions): Viewer {
     }
   }
 
+  /**
+   * Re-decide the render pixel ratio from the canvas's CURRENT CSS size.
+   *
+   * Two things feed it, both decided on the same resize event because both
+   * are about the canvas's share of the screen:
+   *
+   * - The mobile SCALE. The docked page paints two very different canvases in
+   *   one session — the square window upright, the whole screen turned
+   *   sideways, ~2.3x the CSS area — so landscape takes the full-bleed page's
+   *   scale and portrait keeps the docked one. Every other page uses the
+   *   full-bleed scale it booted with.
+   * - The render BUDGET (device.ts). A desktop page is a 0.9 Mpx window one
+   *   moment and an 8 Mpx fullscreen the next, and the budget can only be
+   *   honoured by whoever knows the size — which is this observer, not the
+   *   device constructor. This is the 2026-09-02 (pm) fix for "fullscreen on
+   *   a desktop lags, and so does SuperSplat": `?res=0.7` fixed it outright,
+   *   so the ceiling is fill, and the budget puts a ceiling on fill.
+   *
+   * Must run BEFORE resizeCanvas, which is what sizes the backing store from
+   * maxPixelRatio. ?res and ?perf still win — folded in by targetPixelRatio().
+   */
+  function applyRenderRatio(): void {
+    if (!app) return;
+    const scale =
+      phoneDock && !isPhoneLandscape() ? DOCKED_PERF_SCALE : FULLBLEED_PERF_SCALE;
+    app.graphicsDevice.maxPixelRatio = Math.min(
+      window.devicePixelRatio,
+      targetPixelRatio(scale, stage.clientWidth, stage.clientHeight),
+    );
+  }
+
   // Set by destroy(); makes every entry point a no-op afterwards, so a stray
   // reference to a dead viewer cannot resurrect half of it.
   let destroyed = false;
@@ -428,6 +459,10 @@ export function createViewer(opts: ViewerOptions): Viewer {
        Override either page with ?perf=N, or the final ratio with ?res=N. */
     const { device, renderer } = await createDevice(canvas, {
       perfScale: phoneDock ? DOCKED_PERF_SCALE : FULLBLEED_PERF_SCALE,
+      // The stage is already parented into its window (enterViewer does that
+      // first), so the size is real and the pixel budget binds from frame one.
+      cssWidth: stage.clientWidth,
+      cssHeight: stage.clientHeight,
     });
 
     // The canvas is sized by its host window (CSS 100%), not the browser window:
@@ -552,6 +587,18 @@ export function createViewer(opts: ViewerOptions): Viewer {
         holdBakeInFlight = on;
         if (!on) quality?.resumeColorBake();
       },
+      setRenderBudget: (mpx) => {
+        const v = setRenderBudgetMpx(mpx);
+        // Same sequence as the ResizeObserver: ratio first, then the backing
+        // store, then a redraw so the change is visible without moving.
+        applyRenderRatio();
+        if (app && stage.clientWidth && stage.clientHeight) {
+          app.resizeCanvas(stage.clientWidth, stage.clientHeight);
+        }
+        wake();
+        return v;
+      },
+      getRenderBudget: () => renderBudgetMpx(),
     });
 
     // The ?author rig — crosshair, pose panel, splat-snap anchor picking —
@@ -695,22 +742,7 @@ export function createViewer(opts: ViewerOptions): Viewer {
       // textures and every subsequent frame submits an invalid command
       // buffer — the console spam that drags the whole page down. Skip it.
       if (!stage.clientWidth || !stage.clientHeight) return;
-      /* The docked page paints two very different canvases in one session: the
-         square window upright, and the whole screen turned sideways — about
-         2.3x the CSS area. Render resolution was a per-PAGE constant because the
-         page decided the canvas's share of the screen; now the orientation
-         does, so the same area argument is applied on the same event. Landscape
-         takes the full-bleed page's scale, portrait keeps the docked one, and
-         it is set BEFORE resizeCanvas because that call is what sizes the
-         backing store from maxPixelRatio. ?res and ?perf still win — they are
-         folded in by targetPixelRatio(). Every other page keeps its boot-time
-         value. */
-      if (phoneDock && app) {
-        app.graphicsDevice.maxPixelRatio = Math.min(
-          window.devicePixelRatio,
-          targetPixelRatio(isPhoneLandscape() ? FULLBLEED_PERF_SCALE : DOCKED_PERF_SCALE),
-        );
-      }
+      applyRenderRatio();
       app?.resizeCanvas(stage.clientWidth, stage.clientHeight);
       // The viewport shape changed (rotation / reparenting into another
       // window) — re-apply the camera so its aspect-compensated fov tracks it.
