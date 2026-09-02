@@ -40,6 +40,7 @@ import { PerfHud } from '../ui/perfhud';
 import { SplatQualityControl, MOBILE_PRESET, BASE_PRESET } from './splatquality';
 import { installKnobs } from './knobs';
 import { installSortGate, setOrderUploadPath, type SortGateThresholds } from './gsplatinternals';
+import { AdaptiveResolution } from './adaptive';
 import { mountPhoneDock, isPhoneLandscape, PHONE_LANDSCAPE_QUERY } from '../ui/phonedock';
 import { UI } from '../ui/ui';
 import { targetPixelRatio, renderBudgetMpx, setRenderBudgetMpx } from './device';
@@ -191,6 +192,25 @@ export function createViewer(opts: ViewerOptions): Viewer {
      an A/B on the device. */
   let holdBakeInFlight = true;
 
+  /* ---- The frame-time governor ----------------------------------------------
+     A 30 fps floor on every device, bought with resolution: adaptive.ts
+     watches the pacing of rendered frames and scales the device-decided pixel
+     ratio down (never up past it) until the frame fits, then climbs back when
+     there is headroom. It multiplies into applyRenderRatio() below, so it
+     composes with the mobile cap, the render budget and ?perf, and is applied
+     through the same resize path a window resize takes.
+
+     Off when `?res=N` is present — an absolute ratio is an A/B, and a governor
+     silently moving it would make the A/B a lie — and with `?adapt=0`.
+     `?minfps=N` moves the floor. The HUD's `res` reading is its scale. */
+  const flagsAtBoot = window.location.search + window.location.hash;
+  const minFpsRaw = /(^|[?&#])minfps=(\d+(?:\.\d+)?)/i.exec(flagsAtBoot);
+  const adaptive = new AdaptiveResolution({
+    targetFps: minFpsRaw ? Number(minFpsRaw[2]) : 30,
+  });
+  adaptive.enabled =
+    !/(^|[?&#])adapt=0/i.test(flagsAtBoot) && !/(^|[?&#])res=/i.test(flagsAtBoot);
+
   /* ---- On-demand rendering state ----------------------------------------
      At boot scope rather than inside ensureApp() because loadDemo() has to arm
      it when a scene lands, and loadDemo is a sibling. The long explanation of
@@ -340,6 +360,8 @@ export function createViewer(opts: ViewerOptions): Viewer {
     renderContinuously: () => {
       if (app) app.autoRender = true;
       armIn = 0;
+      // A load's opening frames say nothing about the GPU; the governor holds.
+      adaptive.reset();
     },
     armOnDemand: () => {
       if (onDemand) armIn = ARM_FRAMES;
@@ -417,11 +439,25 @@ export function createViewer(opts: ViewerOptions): Viewer {
     if (!app) return;
     const scale =
       phoneDock && !isPhoneLandscape() ? DOCKED_PERF_SCALE : FULLBLEED_PERF_SCALE;
-    app.graphicsDevice.maxPixelRatio = Math.min(
-      window.devicePixelRatio,
-      targetPixelRatio(scale, stage.clientWidth, stage.clientHeight),
-    );
+    // The governor's scale multiplies LAST, so it can only take pixels away
+    // from what the device rules and the budget decided, never add them.
+    app.graphicsDevice.maxPixelRatio =
+      Math.min(
+        window.devicePixelRatio,
+        targetPixelRatio(scale, stage.clientWidth, stage.clientHeight),
+      ) * adaptive.scale;
+    perf.setRenderScale(adaptive.scale);
   }
+
+  /* The governor's changes take the exact path a window resize does — ratio,
+     backing store, redraw — so there is one way the canvas ever changes size. */
+  adaptive.onChange = (scale, reason) => {
+    if (!app || !stage.clientWidth || !stage.clientHeight) return;
+    applyRenderRatio();
+    app.resizeCanvas(stage.clientWidth, stage.clientHeight);
+    wake();
+    console.info(`${logTag()} adaptive resolution ${reason} → ×${scale.toFixed(2)}`);
+  };
 
   // Set by destroy(); makes every entry point a no-op afterwards, so a stray
   // reference to a dead viewer cannot resurrect half of it.
@@ -599,6 +635,11 @@ export function createViewer(opts: ViewerOptions): Viewer {
         return v;
       },
       getRenderBudget: () => renderBudgetMpx(),
+      adaptive: () => adaptive,
+      resetRenderScale: () => {
+        adaptive.scale = 1;
+        adaptive.onChange?.(1, 'reset from console');
+      },
     });
 
     // The ?author rig — crosshair, pose panel, splat-snap anchor picking —
@@ -731,7 +772,12 @@ export function createViewer(opts: ViewerOptions): Viewer {
        into the next one — precisely the case worth catching. `frameend` fires
        after the render has been submitted, so its deltas are true frame pacing.
        Disabled, the handler is one property read. */
-    app.on('frameend', () => perf.sample());
+    app.on('frameend', () => {
+      perf.sample();
+      // Same event, same reasoning: only RENDERED frames carry pacing
+      // information, and `frameend` is the one hook that fires for exactly those.
+      adaptive.sample(performance.now());
+    });
 
     // ---- Resize: track the HOST WINDOW, not the browser window ---------------
     // The stage is reparented between differently-sized windows, so a
@@ -744,6 +790,9 @@ export function createViewer(opts: ViewerOptions): Viewer {
       if (!stage.clientWidth || !stage.clientHeight) return;
       applyRenderRatio();
       app?.resizeCanvas(stage.clientWidth, stage.clientHeight);
+      // The frames after a swapchain reallocation are slow for their own
+      // reasons; the governor must not read them as a slow device.
+      adaptive.notifyResize();
       // The viewport shape changed (rotation / reparenting into another
       // window) — re-apply the camera so its aspect-compensated fov tracks it.
       controller?.refresh();
