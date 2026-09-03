@@ -14,6 +14,18 @@ same bug CLASS found nine more (§10). All fixed and verified.
 particular "The overcorrection, and what SuperSplat actually does", which
 supersedes the resolution and culling conclusions the 2026-08-23 pass recorded.
 
+> **Superseded in part by the 2026-09-02 pass — `TEMPLATE.md` → "Profiled
+> 2026-09-02".** Three things in this file are no longer current: (a) phones
+> load the **1.6M** bundle, not the full 2.53M (§6, §7) — decided by device on
+> 2026-08-31 after a WebGPU phone stuttered on 2.53M, and now also on every
+> WebGL2 device; (b) the render ratio is no longer fixed per page — a 2.0 Mpx
+> budget and a frame-time governor (`core/adaptive.ts`) re-decide it on every
+> resize and during motion, and the HUD's `res` line shows the governor's
+> scale; (c) `sort --` in §7 was radial sorting suppressing rotation-triggered
+> sorts, but WALKING still sorts continuously on radial — the 2026-09-02 pass
+> measured 28 sorts/s and an 11.67 MB upload per sort on WebGL2, and gated it.
+> The layout content here (§2–§5, §8–§10) stands.
+
 ---
 
 ## 1. What came back from the phone, and what each complaint actually was
@@ -144,9 +156,14 @@ answered.*
 - ~~`perfScale` 0.75~~ **ANSWERED.** 60 fps, worst 18 ms, at dpr 2.01 on a
   WebGL2 iPhone. It holds, with headroom: the 0.85 window renders 57% more fill
   at the same frame time.
-- ~~Full 2.53M vs the 1.2M bundle~~ **ANSWERED.** `sort --` on the real device:
+- ~~Full 2.53M vs the 1.2M bundle~~ ~~**ANSWERED.** `sort --` on the real device:
   the depth sort did not fire once. `?lite=1` is not needed and is kept only as
-  a fallback for a genuinely slower phone.
+  a fallback for a genuinely slower phone.~~ **RE-ANSWERED THE OTHER WAY,
+  2026-08-31 and 2026-09-02.** `sort --` was a still-ish camera under radial
+  sorting; walking sorts continuously. A 1.6M bundle (not 1.2M — that one read
+  as broken) is now the default on every phone and every WebGL2 device. See
+  `sceneloader.ts` for the lineage and `TEMPLATE.md` → "Profiled 2026-09-02"
+  for the upload-per-sort measurement behind it.
 - **Still open: the window aspect** (§5 — 4:3 shipped, 0.85 is the fov limit and
   measured to have headroom), and **whether `colorUpdateAngle: 30` reads flat
   while walking**, which is the one quality deviation from SuperSplat and can

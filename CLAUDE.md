@@ -64,11 +64,17 @@ The layout: `src/index.ts` is the public API (`createViewer({ mount, scenes,
 brand, onEnter, onHeroOpen })` → `{ load, goToHero, destroy }`); the pages
 boot through `src/site-entry.ts`, which exposes the handle as `__viewer`.
 Engine code sits in `core/` (main, camera + flyto + orbit, sceneloader,
-device, stage, knobs, splatquality, splatpick, brand, authoring), `nav/`
-(walk, locomotion, joystick, heropoints), `ui/` (ui, phonedock, perfhud,
-disclaimer) and `styles/` (five sheets imported by styles/index.css, in an
-order that same-specificity ties depend on). Client page styling lives in
-`sites/<client>/brand.css`, linked from each page's head.
+device, stage, knobs, splatquality, splatpick, brand, authoring, adaptive,
+gsplatinternals), `nav/` (walk, locomotion, joystick, heropoints), `ui/` (ui,
+phonedock, perfhud, disclaimer) and `styles/` (five sheets imported by
+styles/index.css, in an order that same-specificity ties depend on). Client
+page styling lives in `sites/<client>/brand.css`, linked from each page's head.
+
+`core/gsplatinternals.ts` is the **only** file allowed past the engine's public
+API (it patches the live gsplat manager's re-sort test and hooks the work
+buffer for the HUD). Every access is feature-checked and warns once if the
+engine's shape changes — re-check it on every PlayCanvas bump; its header
+lists the greps. Do not reach into `app.renderer.gsplatDirector` anywhere else.
 
 The `?author` rig (`core/authoring.ts`, incl. `__logPose`) is build-gated:
 present in dev, tree-shaken out of `npm run build` unless
@@ -107,8 +113,35 @@ Poses cannot be guessed — they only make sense against the rendered scene.
    with `autoscene/anchors.py`.
 
 Other live helpers: `__walk(0/1)`, `__eyeHeight(m)`, `__walkDebug()`,
-`__stats(1)`, `__splat()`. URL flags (`?stats`, `?gl`, `?res=`, `?lite=1`,
-`?author`, …) are catalogued in TEMPLATE.md.
+`__stats(1)`, `__splat()`, `__sortGate()`, `__mpx()`, `__adapt()`,
+`__flyBake()`. URL flags (`?stats`, `?gl`, `?res=`, `?lite=1`, `?author`,
+`?sortdist=`, `?mpx=`, `?adapt=0`, `?minfps=`, …) are catalogued in
+TEMPLATE.md → "URL flags".
+
+## Performance: measure before tuning
+
+Everything performance-related is written up in TEMPLATE.md → "Performance —
+where the frame time goes", and the 2026-09-02 pass ("Profiled 2026-09-02") is
+the current state of knowledge. The short version, so nobody re-derives it:
+
+- **The instrument is `?stats`.** Five readings: renderer, fps/worst, Mpx/dpr,
+  splats/sort, and `up` (WebGL2 order-texture uploads) / `bake` (colour
+  re-bakes) / `res` (the governor's resolution scale). Read `worst`, not fps.
+- **Four mechanisms are already handled; do not rediscover them as wins.**
+  (1) On WebGL2 every completed depth sort re-uploads the whole order texture
+  (11.67 MB at 2.53M) — a 5 cm sort gate, radial sorting everywhere and the
+  1.6M bundle on WebGL2 tame it. (2) Camera translation re-bakes every splat's
+  colour — `colorUpdateAngle` 30 everywhere, and bakes are HELD during hero
+  fly-ins. (3) Fullscreen desktop is fill-bound — a 2.0 Mpx backing-store
+  budget. (4) What a given GPU can carry is unknowable in advance — the
+  frame-time governor (`core/adaptive.ts`) scales resolution to hold a 30 fps
+  floor, reverting if a step did not help. Governor resizes land at the top of
+  `update`, never on `frameend` (a resize after the draw shows a black frame).
+- **Phones and WebGL2 load the 1.6M bundle; only a WebGPU desktop gets 2.53M.**
+  `?lite=1` / `?full=1` override. The decision lineage is in sceneloader.ts.
+- **A hidden Browser pane never ticks.** Pump `__app.tick()` from a timer, and
+  if timers are throttled, drive it synchronously with busy-waits — the
+  recipe is in TEMPLATE.md "One measurement trap" and the memory notes.
 
 ## Git hygiene
 

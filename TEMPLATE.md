@@ -622,10 +622,12 @@ Measured on the WebGL2 path at a 375x812 portrait frame.
 phone. Cutting it was right. Cutting it to a flat **1.0** was not — see below.
 
 **2. Splat count — the only thing that touches the sort.** See
-`autoscene/RUNNING.md` → "mobile_asset.py". The 1.2M bundle still exists and is
-still the right lever *if the sort is the problem*, but it is **no longer the
-default** — phones load the full 2.53M scene, and `?lite=1` selects the reduced
-one. See below for why.
+`autoscene/RUNNING.md` → "mobile_asset.py". The default has moved three times
+and the lineage lives in `sceneloader.ts`; **as of 2026-09-02 the 1.6M bundle
+is the default on every phone AND on every WebGL2 device**, and only a WebGPU
+desktop loads the full 2.53M. The 1.2M bundle that this pass built was replaced
+by the 1.6M one on 2026-08-31 (the 1.2M read as broken on the device — floors
+and desks thinned to see-through). `?lite=1` / `?full=1` override either way.
 
 **3. `radialSorting` — a threshold, not a preference.** The engine re-sorts when
 the camera changes by more than `1e-3`, but *which quantity* that tests depends
@@ -894,6 +896,13 @@ whatever fps the visitor last moved at, which is worse than a wrong number.
 - The engine is not created at all until the first Enter click.
 - `antialias: false` — splats do their own edge softening.
 - No `CameraFrame` is constructed unless `?sharpen` is passed.
+- **2026-09-02, all in "Profiled 2026-09-02" above:** radial sorting and
+  `colorUpdateAngle` 30 on every device; the 5 cm sort gate on the WebGL2
+  re-sort trigger; the 1.6M bundle on WebGL2 as well as on phones; colour
+  re-bakes held during fly-ins; the 2.0 Mpx render budget; the 30 fps
+  frame-time governor with its not-fill-bound revert; the `up` / `bake` / `res`
+  HUD lines. The PBO order-upload path was measured worse on Chrome and is
+  exposed only as `?pbo=1` for a Firefox A/B.
 
 ### One measurement trap
 

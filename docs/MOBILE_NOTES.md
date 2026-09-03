@@ -33,8 +33,20 @@ test and are all in. Typecheck and production build clean; both pages emit.
 > that page:** a 4:3 window never reaches the ceiling, so the authored 68.6°
 > horizontal framing is shown intact rather than cropped to 42.4°.
 
-**Both later passes are done.** Read `TEMPLATE.md` → "Performance — where the
-frame time goes" first for anything performance-related, and
+> **AND A THIRD PASS — 2026-09-02. Read `TEMPLATE.md` → "Profiled 2026-09-02".**
+> Two new datapoints (a Firefox/Linux profile, an iPhone 18 Pro recording) put
+> the remaining cost in two engine mechanisms nobody had measured: on WebGL2
+> every completed depth sort re-uploads the whole order texture (11.67 MB at
+> 2.53M), and camera translation re-bakes every splat's colour. Fixed with a
+> sort gate, radial sorting + `colorUpdateAngle` 30 on every device, bakes held
+> during fly-ins, the 1.6M bundle on WebGL2 as well as phones, a 2.0 Mpx
+> render budget for fullscreen desktops, and a frame-time governor that scales
+> resolution to hold 30 fps. **Phones load the 1.6M bundle again** (since
+> 2026-08-31, by device), reversing the banner above. `?stats` grew `up`,
+> `bake` and `res` lines.
+
+**All three later passes are done.** Read `TEMPLATE.md` → "Performance — where
+the frame time goes" first for anything performance-related, and
 `PHONE_DOCK_NOTES.md` for the current state of the phone layout. Do not start
 from this file.
 
