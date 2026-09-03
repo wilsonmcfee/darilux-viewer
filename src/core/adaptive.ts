@@ -29,7 +29,7 @@
 
    HOW IT DECIDES — and the three asymmetries that keep it from oscillating
 
-   1. DOWN IS FAST, UP IS SLOW. A step down needs 24 consecutive frames whose
+   1. DOWN IS FAST, UP IS SLOW. A step down needs 40 consecutive frames whose
       mean is more than 5% over the target; a step up needs 120 (doubling
       after every bounce, up to 960) whose mean is under 55% of it. Between
       those two bands — 18 to 35 ms at a 30 fps floor — it holds, which is
@@ -72,10 +72,21 @@
    render budget, `?perf`); it only scales that down, to a floor of 0.4 (16% of
    the pixels). `?res=N` is an absolute override and turns it off, so the honest
    A/B stays honest. `?adapt=0` turns it off; `?minfps=N` moves the floor.
+
+   It also does not resize the canvas itself. onChange only reports; main.ts
+   applies the change at the top of the NEXT update, before that frame renders.
+   Resizing where the decision is made — on frameend, after the frame was
+   drawn — clears the freshly drawn buffer and presents a black frame, which is
+   what the first phone test saw as flicker.
    ========================================================================== */
 
-/** Consecutive rendered frames whose mean must exceed the target to step down. */
-const WINDOW_DOWN = 24;
+/** Consecutive rendered frames whose mean must exceed the target to step down.
+    40 rather than 24 after the first phone test: a burst of fast movement on a
+    device whose ceiling is the sort, not fill, tripped a step every burst and
+    each step (and its revert) is a visible change of sharpness. 40 frames is
+    1.3 s of sustained slowness at the floor — a genuinely fill-bound device is
+    slow for its whole session and still converges in a few seconds. */
+const WINDOW_DOWN = 40;
 /** Consecutive rendered frames whose mean must sit under the up-band to step up (base). */
 const WINDOW_UP = 120;
 /** The up-window doubles after every bounce (down after an up), to this ceiling. */

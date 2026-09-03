@@ -450,14 +450,30 @@ export function createViewer(opts: ViewerOptions): Viewer {
   }
 
   /* The governor's changes take the exact path a window resize does — ratio,
-     backing store, redraw — so there is one way the canvas ever changes size. */
+     backing store, redraw — so there is one way the canvas ever changes size.
+
+     BUT NOT AT THE MOMENT THEY ARE DECIDED. The governor samples on
+     `frameend`, i.e. after the frame has been drawn into the old-size buffer.
+     Resizing the canvas right there CLEARS it, and the compositor shows an
+     empty canvas until the next frame lands 16-33 ms later — one black frame
+     per resolution change, which on the phone read as "the screen flickers
+     black when I move quickly", because fast motion is exactly when the
+     governor changes resolution. So the change is only FLAGGED here and
+     applied at the top of the next `update`, which runs before that frame's
+     render: the buffer is resized and immediately redrawn inside one tick, and
+     nothing blank is ever presented. */
+  let renderScaleDirty = false;
   adaptive.onChange = (scale, reason) => {
-    if (!app || !stage.clientWidth || !stage.clientHeight) return;
+    renderScaleDirty = true;
+    console.info(`${logTag()} adaptive resolution ${reason} → ×${scale.toFixed(2)}`);
+  };
+  function applyPendingRenderScale(): void {
+    if (!renderScaleDirty || !app || !stage.clientWidth || !stage.clientHeight) return;
+    renderScaleDirty = false;
     applyRenderRatio();
     app.resizeCanvas(stage.clientWidth, stage.clientHeight);
     wake();
-    console.info(`${logTag()} adaptive resolution ${reason} → ×${scale.toFixed(2)}`);
-  };
+  }
 
   // Set by destroy(); makes every entry point a no-op afterwards, so a stray
   // reference to a dead viewer cannot resurrect half of it.
@@ -639,6 +655,9 @@ export function createViewer(opts: ViewerOptions): Viewer {
       resetRenderScale: () => {
         adaptive.scale = 1;
         adaptive.onChange?.(1, 'reset from console');
+        // A console call is outside the frame loop; under on-demand rendering
+        // no update may be coming, so apply now rather than wait for one.
+        applyPendingRenderScale();
       },
     });
 
@@ -714,6 +733,9 @@ export function createViewer(opts: ViewerOptions): Viewer {
 
     // ---- Frame loop ----------------------------------------------------------
     app.on('update', (dt: number) => {
+      // A resolution change the governor decided last frame lands here, before
+      // this frame renders — see the note at adaptive.onChange.
+      applyPendingRenderScale();
       // Auto-frame a bounds-only scene as soon as its bounding box is available.
       loader.tryAutoFrame();
       controller!.update(dt);

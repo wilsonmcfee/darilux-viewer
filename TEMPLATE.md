@@ -1035,7 +1035,7 @@ pacing under rAF; undrawn on-demand frames do not count and a gap over 500 ms
 restarts the window), and scales the device-decided ratio DOWN — never above
 it — until the mean fits, then climbs back when there is headroom:
 
-- **down** after 24 consecutive frames whose mean is more than 5% over
+- **down** after 40 consecutive frames whose mean is more than 5% over
   33.3 ms, by `× sqrt(0.95 · target / mean)` clamped to [0.6, 0.9] per step
   (pixels scale with the square, so a badly over-budget device gets most of
   the way in one move). The 5% is the vsync margin: rAF paces in whole
@@ -1054,7 +1054,13 @@ it — until the mean fits, then climbs back when there is headroom:
 
 Every change, and every window resize, is followed by a 20-frame / 600 ms
 cooldown (a swapchain reallocation makes its own slow frames), and a scene load
-holds it for 60 rendered frames. Floor 0.4 (16% of the pixels). It composes
+holds it for 60 rendered frames. Floor 0.4 (16% of the pixels). **The resize
+itself happens at the top of the next `update`, not where the decision is
+made:** the governor decides on `frameend`, after the frame has been drawn, and
+resizing there clears the buffer and presents one black frame — the first phone
+test saw that as "the screen flickers black when I move quickly", because fast
+motion is when the governor acts. Applied before the render, the resized buffer
+is drawn in the same tick and nothing blank is shown. It composes
 with everything above: `applyRenderRatio()` in main.ts multiplies its scale
 last. `?res=N` disables it (an absolute ratio is an A/B), `?adapt=0` disables
 it, `?minfps=N` moves the floor, `__adapt()` reports, `__adapt('reset')` is
