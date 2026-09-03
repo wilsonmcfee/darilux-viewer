@@ -101,18 +101,36 @@ large to commit, and the decode default above means you do not need them.
 
 ## mobile_asset.py — the reduced bundle for phones
 
-`src/demos.ts` carries an optional `srcMobile` beside `src`. Phones load it;
-everything else loads the full scene. It exists because splat **count** is the
-one mobile cost no renderer setting can reduce: a device that falls back to
-WebGL2 — an older phone, or any in-app browser wrapping WKWebView — sorts the
-whole cloud on the CPU every time the camera moves, and that sort is linear in
-the count. Measured on the WebGL2 path with `?gl`:
+`src/demos.ts` carries an optional `srcMobile` beside `src`. Phones load it,
+and **since 2026-09-02 so does every WebGL2 device, desktop included**; only a
+WebGPU desktop loads the full scene (`?lite=1` / `?full=1` override, and
+`src/core/sceneloader.ts` carries the lineage of that decision). It exists
+because splat **count** is the one cost no renderer setting can reduce: a
+device on WebGL2 — an older phone, any in-app browser wrapping WKWebView,
+Firefox on Linux — sorts the whole cloud on the CPU every time the camera
+moves, that sort is linear in the count, and (the 2026-09-02 finding) **every
+completed sort then re-uploads the entire order texture to the GPU**, which is
+`textureSize² × 4` bytes and the single largest main-thread cost on that path.
+Measured on the WebGL2 path with `?gl`:
 
-| bundle | gaussians | download | depth sort |
-|---|---|---|---|
-| `bluedio` (desktop) | 2,534,528 | 34.4 MB | 19–20 ms |
-| `bluedio-mobile` | 1,600,000 | 22.6 MB | 11 ms |
-| (1.2M, retired) | 1,200,000 | 18.0 MB | 8–10 ms |
+| bundle | gaussians | download | depth sort | order upload per sort |
+|---|---|---|---|---|
+| `bluedio` (desktop) | 2,534,528 | 34.4 MB | 19–20 ms | 11.67 MB (1708²) |
+| `bluedio-mobile` | 1,600,000 | 22.6 MB | 11–12 ms | 7.37 MB (1357²) |
+| (1.2M, retired) | 1,200,000 | 18.0 MB | 8–10 ms | — |
+
+> **Requested from the viewer side, 2026-09-02 — a bundle A/B worth building.**
+> The other engine cost that pass found is the colour re-bake: camera
+> translation re-evaluates the view-dependent (spherical-harmonic) colour of
+> EVERY resident splat, on both renderers, and it is the likeliest cause of the
+> fly-in frame drops in the iPhone 18 Pro recording. A bundle exported with
+> `shN.bands = 0` never re-bakes at all (`hasSphericalHarmonics` is false in the
+> engine), and drops `shN_centroids.webp` + `shN_labels.webp` (~3.4 MB of the
+> 22.6). The cost is view-dependent colour — flatter specular on drum shells and
+> glass. Build it as a third bundle beside the 1.6M one and judge it on the
+> device before deciding; the viewer's `?stats` `bake` line will read `--` on it.
+> Now that the 1.6M bundle also serves WebGL2 desktops, judge floor and desk
+> seal at desktop window sizes too, not only on a phone.
 
 The bundle was 1.2M first and was rebuilt at 1.6M on 2026-08-31: on the device
 (iPhone 16 Pro, iOS 18.5) the 1.2M version showed invisible floor panes and

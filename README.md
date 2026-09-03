@@ -38,22 +38,28 @@ usual blocker is Windows Firewall, not config. Two routes:
 The mobile build is a genuinely different layout (portrait frame, thumb sticks,
 different help copy), so **desktop-narrow is not a substitute for a phone** for
 anything to do with feel. The knobs that let you tune it from the device are URL
-params — see `TEMPLATE.md` → "The tuning knobs".
+params — see `TEMPLATE.md` → "The tuning knobs". Add `?stats` to any page for
+the frame-time readout (renderer, fps/worst, Mpx/dpr, splats/sort, and the
+`up` / `bake` / `res` line); `TEMPLATE.md` → "Performance" says how to read it.
 
 ## Where things live
 
 | File | What it's for |
 |---|---|
-| **`src/demos.ts`** | **The one file you edit.** All three scenes, their copy, camera framing, and hero points — as data. No rendering logic. |
-| `src/disclaimer.ts` / `DISCLAIMER-DRAFT.md` | The "About this demo" copy (draft, for your review). |
-| `src/main.ts` | Boots the app, loads one splat at a time, runs the frame loop. |
-| `src/camera.ts` | Orbit + fly camera, eased hero fly-ins, `__logPose()` helper. |
-| `src/heropoints.ts` | The floating 3D-anchored gear labels. |
-| `src/walk.ts` | Height-locked movement + the walkable-region SDF (Bluedio). |
-| `src/joystick.ts` | The two touch thumb sticks, and the "is this a touch device" test. |
-| `src/stage.ts` | The shared viewer chrome as markup, injected into every page. |
-| `src/device.ts` | WebGPU→WebGL2 device selection + the "unsupported browser" backstop. |
-| `src/ui.ts` / `src/style.css` | The overlay UI and the Darilux styling. |
+| **`src/demos.ts`** | **The one file you edit.** All scenes, their copy, camera framing, hero points and walk regions — as data. No rendering logic. `src/types.ts` holds the interfaces. |
+| `src/index.ts` / `src/site-entry.ts` | The public `createViewer()` API, and the page boot that exposes it as `__viewer`. |
+| `src/core/main.ts` | Boots the engine, owns the frame loop, on-demand rendering, the render ratio and the governor's resize. |
+| `src/core/sceneloader.ts` | One splat at a time: load, swap, unload — and which bundle a device gets. |
+| `src/core/camera.ts` (+ `flyto.ts`, `orbit.ts`) | Orbit + fly + walk camera, eased hero fly-ins, `__logPose()`. |
+| `src/core/device.ts` | WebGPU→WebGL2 device selection, the render pixel ratio and the 2.0 Mpx budget. |
+| `src/core/adaptive.ts` | The frame-time governor: scales resolution to hold a 30 fps floor. |
+| `src/core/splatquality.ts` | The engine's splat cost/quality knobs, the presets, the fly-in bake hold. |
+| `src/core/gsplatinternals.ts` | The one file that reaches past the engine's public API (sort gate, HUD hooks). |
+| `src/core/knobs.ts` | Every URL flag and `__console` handle. |
+| `src/core/stage.ts` / `brand.ts` / `authoring.ts` | Shared chrome markup, the brand block, the build-gated `?author` rig. |
+| `src/nav/` | `walk.ts` (height lock + region SDF), `locomotion.ts`, `joystick.ts` (thumb sticks), `heropoints.ts` (the dots). |
+| `src/ui/` | `ui.ts` (overlay UI), `phonedock.ts` (the docked phone layout), `perfhud.ts` (`?stats`), `disclaimer.ts`. |
+| `src/styles/` | Five sheets imported by `index.css`, in an order same-specificity ties depend on. Client styling in `sites/<client>/brand.css`. |
 
 > **The deep documentation is `TEMPLATE.md`**, not this file. It is the
 > walkthrough for wiring a new scan in, and it is where walk mode, the touch
@@ -72,7 +78,7 @@ The `anchor` on a hero point is the 3D spot its label pins to (defaults to the p
 
 ## The splat files
 
-The three scenes are already in place under `public/splat/` as SuperSplat SOGS bundles (a folder each: `meta.json` + `.webp` textures) — synths ~9 MB, Studio E ~12 MB, common room ~30 MB, **~50 MB total**. That's comfortably under GitHub Pages' 100 MB per-file limit and ~1 GB repo guidance, so everything ships straight from the repo — no external asset host needed. `demos.ts` points each `src` at its `meta.json`. To re-export a scene, see `public/splat/README.txt`. Keep raw `.ply`/`.psht` out of git (already in `.gitignore`).
+The scenes live under `public/splat/` as SuperSplat SOGS bundles (a folder each: `meta.json` + `.webp` textures) — synths ~9 MB, Studio E ~8 MB, common room ~30 MB, and Bluedio as **two** bundles: `bluedio` (2.53M gaussians, 33 MB) for WebGPU desktops and `bluedio-mobile` (1.6M, 23 MB) for phones and every WebGL2 device (`demos.ts` → `src` / `srcMobile`; the decision is in `src/core/sceneloader.ts`, built by `autoscene/mobile_asset.py`). ~100 MB total, still under GitHub Pages' per-file limit, so everything ships from the repo for now — assets are slated to move to R2 + CDN. To re-export a scene, see `public/splat/README.txt`. Keep raw `.ply`/`.psht` out of git (already in `.gitignore`).
 
 ## Deploying to GitHub Pages
 

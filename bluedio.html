@@ -86,9 +86,12 @@
             Walk it at standing height, or fly in to any piece of gear.
           </p>
           <button class="enter" type="button"><span class="tri"></span> Step into the room</button>
-          <div class="solo-foot">
-            <button id="disclaimer-open" type="button">About this demo</button>
-          </div>
+          <!-- No "About this demo" trigger on the poster — removed 2026-09-02
+               (Will's call), matching bluedio-phone.html. ui.ts treats
+               #disclaimer-open as optional, so its absence costs nothing; the
+               modal markup is still injected, so putting a
+               <div class="solo-foot"><button id="disclaimer-open">…</button></div>
+               back here is all it takes to restore it. -->
         </div>
       </div>
     </div>
