@@ -67,6 +67,13 @@
                 can see, and it is the number that explains a dip during a
                 fly-in that no sort or upload accounts for. Fly-ins hold this
                 at 0 by design (main.ts) and fire one on arrival.
+     res        ADDED 2026-09-02, both paths: the frame-time governor's scale
+                on the render pixel ratio (adaptive.ts). 1.00 means the device
+                is rendering at whatever device.ts decided; 0.74 means the
+                governor took 26% off each axis to hold the 30 fps floor. The
+                px / dpr line above already reflects it — this says WHY the
+                ratio is what it is. Dropping and coming straight back is the
+                "not fill-bound" revert, which is itself a diagnosis.
 
    COST OF THE HUD ITSELF
 
@@ -121,6 +128,7 @@ export class PerfHud {
   private enabled = false;
   private renderer = '?';
   private splats = 0;
+  private renderScale = 1;
 
   constructor(private host: HTMLElement) {}
 
@@ -142,7 +150,12 @@ export class PerfHud {
   /** Resident gaussian count, so the sort workload is on screen. */
   setSplatCount(n: number): void {
     this.splats = n;
-    }
+  }
+
+  /** The governor's resolution scale (adaptive.ts), shown as `res`. */
+  setRenderScale(s: number): void {
+    this.renderScale = s;
+  }
 
   /**
    * Time the big texImage2D calls on THIS device's context. Installed on the
@@ -234,7 +247,7 @@ export class PerfHud {
       `${this.renderer}  idle · not drawing\n` +
       `${w}x${h}  ${((w * h) / 1e6).toFixed(2)} Mpx  dpr ${dpr.toFixed(2)}\n` +
       `${(this.splats / 1e6).toFixed(2)}M splats  sort --\n` +
-      `up --  bake --`;
+      `up --  bake --  res ${this.renderScale.toFixed(2)}`;
 
     /* Start the next moving window from here, so the first reading after the
        visitor moves again measures motion rather than however long they sat
@@ -301,7 +314,7 @@ export class PerfHud {
       `${this.renderer}  ${fps.toFixed(0)} fps  worst ${this.worstMs.toFixed(0)}ms\n` +
       `${w}x${h}  ${mp.toFixed(2)} Mpx  dpr ${dpr.toFixed(2)}\n` +
       `${(this.splats / 1e6).toFixed(2)}M splats  sort ${sort}\n` +
-      `up ${up}  bake ${bake}`;
+      `up ${up}  bake ${bake}  res ${this.renderScale.toFixed(2)}`;
 
     this.windowStart = now;
     this.frames = 0;

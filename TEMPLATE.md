@@ -359,7 +359,10 @@ interesting. Detail in "Performance" below.
 |---|---|
 | `?stats` | frame time / resolution / splat count / sort time readout. `__stats(1)` |
 | `?gl` | force the WebGL2 fallback, to reproduce an older phone at a desk |
-| `?res=N` | override the render pixel ratio outright. `?res=1` = the 2026-08-23 build |
+| `?res=N` | override the render pixel ratio outright, bypassing the budget. `?res=1` = the 2026-08-23 build |
+| `?mpx=N` | the backing-store budget in megapixels (default 2.0; 0 = off, the pre-2026-09-02 native-up-to-DPR-2 desktop). `__mpx(n)` |
+| `?adapt=0` | turn the frame-time governor off (it is on by default, and off whenever `?res` is given). `__adapt(0/1)`, `__adapt('reset')` |
+| `?minfps=N` | the governor's floor, default 30 |
 | `?perf=N` | override just the mobile scale. `?perf=0.5` = SuperSplat's default, `?perf=1` = SuperSplat with performance mode off |
 | `?lite=1` | load the reduced 1.6M bundle (`srcMobile`) — the default on phones and on WebGL2 |
 | `?full=1` | force the full 2.53M asset (the default only on a WebGPU desktop) |
@@ -1003,6 +1006,75 @@ then `?stats&pbo=1`, each while walking with W — read `up`. The iPhone:
 `?stats` then `?stats&flybake=1`, tapping a hero and closing it — read `worst`
 and `bake` during the flight. If the fly-in dips survive with `bake --`, the
 hypothesis is wrong and the next suspect is the DOM work at card open/close.
+
+**Addendum, the same afternoon: fullscreen on a desktop is fill-bound, and so
+is SuperSplat.** With everything above in place the desktop still lagged
+fullscreen — and Will ran the same scan in SuperSplat fullscreen and it lagged
+too. Same engine, same asset, same pixels. `?res=0.7` fixed the frame rate
+outright, which settles it: the ceiling is fill.
+
+The desktop rule had been "render native up to DPR 2" with no ceiling on the
+pixel COUNT, so the workload depended entirely on the monitor: 0.9 Mpx in the
+1280x720 window every number above was measured in, 3.7 Mpx on a 1440p
+fullscreen, 8.3 Mpx on 4K or on 1440p at 150% scaling. Nine times the tuned
+fill, plus a GPU sort of 2.53M every frame. No sort or bake knob touches it.
+
+So the backing store now has a **budget of 2.0 Mpx** ("1080p"), applied on
+every resize by scaling the ratio DOWN to `sqrt(budget / cssArea)`, floor 0.5:
+a 1080p monitor renders native, 1440p at 0.74 (the 0.7 judged smooth), 4K at
+0.49. The compositor upscales the rest; splats tolerate that far better than
+polygon edges, and the card, captions and dots are DOM and stay crisp. It never
+binds on the phone layouts, which sit at ~0.6 Mpx already. `?mpx=N` / `__mpx(n)`
+to A/B it, `?mpx=0` for the old behaviour, `?res=N` still wins outright.
+
+**The frame-time governor — a 30 fps floor on every device.** The budget caps
+fill from the monitor's side; `src/core/adaptive.ts` closes the loop from the
+frame's side, because no fixed number can know what a given GPU carries. It
+reads the gap between consecutive RENDERED frames off `frameend` (true frame
+pacing under rAF; undrawn on-demand frames do not count and a gap over 500 ms
+restarts the window), and scales the device-decided ratio DOWN — never above
+it — until the mean fits, then climbs back when there is headroom:
+
+- **down** after 40 consecutive frames whose mean is more than 5% over
+  33.3 ms, by `× sqrt(0.95 · target / mean)` clamped to [0.6, 0.9] per step
+  (pixels scale with the square, so a badly over-budget device gets most of
+  the way in one move). The 5% is the vsync margin: rAF paces in whole
+  vsyncs, so a device that has landed exactly on the two-vsync 33.3 ms line is
+  AT the floor, and without the margin float noise read it as over;
+- **up** by ÷0.9 after 120 consecutive frames under 18 ms — doubling that
+  window after every bounce, to 960 — so a healthy 60 Hz device returns to
+  full resolution and a marginal one does not oscillate;
+- **hold** between the two bands;
+- **revert and pause** if a step down left the frame over the floor AND did
+  not improve the mean by 8%: a device whose ceiling is the CPU sort or the
+  upload does not get blurred for nothing. The pause is 15 s, doubling on
+  every repeat to two minutes; a step that works resets it. Reading `res` dip
+  and snap back on the HUD is that rule saying "not fill-bound — look at
+  `sort` and `up` instead".
+
+Every change, and every window resize, is followed by a 20-frame / 600 ms
+cooldown (a swapchain reallocation makes its own slow frames), and a scene load
+holds it for 60 rendered frames. Floor 0.4 (16% of the pixels). **The resize
+itself happens at the top of the next `update`, not where the decision is
+made:** the governor decides on `frameend`, after the frame has been drawn, and
+resizing there clears the buffer and presents one black frame — the first phone
+test saw that as "the screen flickers black when I move quickly", because fast
+motion is when the governor acts. Applied before the render, the resized buffer
+is drawn in the same tick and nothing blank is shown. It composes
+with everything above: `applyRenderRatio()` in main.ts multiplies its scale
+last. `?res=N` disables it (an absolute ratio is an A/B), `?adapt=0` disables
+it, `?minfps=N` moves the floor, `__adapt()` reports, `__adapt('reset')` is
+the one-call A/B for what it bought. The HUD's `res` reading is its scale.
+
+Verified two ways. Against a synthetic model with rAF's whole-vsync pacing
+(`scratchpad` simulation, four cases): a fill-bound 60 ms frame took ONE step to
+0.69 and sat at the two-vsync 33.3 ms line, held; made fast, it climbed back
+to 1.0 in four ÷0.9 steps; a CPU-bound 45 ms frame stepped to 0.80, reverted,
+and paused 15 s then 30 s; a marginal 36 ms frame took one step to 0.80 and
+held. In the page, driving the engine at 45 ms per frame by hand: `down ×0.84`
+(backing store 1280x720 → 1073x603, HUD `res 0.84`), then the revert to 1.00
+with a 15 s pause, because a busy-wait is exactly the kind of frame the canvas
+size cannot shorten.
 
 **The durable fix is upstream.** Two engine changes would make most of this
 file unnecessary: a `scene.gsplat.sortUpdateDistance` / `sortUpdateAngle` pair

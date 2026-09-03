@@ -35,6 +35,76 @@ export interface DeviceOptions {
    * passes more, because its canvas is a third of the area.
    */
   perfScale?: number;
+  /** The canvas's CSS size at creation, so the pixel budget can bind from the first frame. */
+  cssWidth?: number;
+  cssHeight?: number;
+}
+
+/* ---- The render budget --------------------------------------------------
+   ADDED 2026-09-02 (pm). The morning's pass fixed the WebGL2 sort upload and
+   the re-bake, and the desktop still lagged FULLSCREEN — and so did SuperSplat
+   on the same scan, fullscreen. Same engine, same asset, same pixels: that is
+   the fill ceiling, and `?res=0.7` fixing the frame rate outright was the
+   confirmation.
+
+   Until now the desktop rule was "min(devicePixelRatio, 2)", i.e. render
+   NATIVE up to DPR 2 with no ceiling on the pixel count. The workload that
+   number produces depends entirely on the monitor:
+
+     1280x720 window, DPR 1   0.9 Mpx   (where every number above was measured)
+     1920x1080 fullscreen     2.1 Mpx
+     2560x1440 fullscreen     3.7 Mpx
+     2560x1440 at 150% (1.5)  8.3 Mpx
+     3840x2160 fullscreen     8.3 Mpx
+
+   Splat cost is pixels times overdraw, so a 4K desktop was being asked for
+   nine times the fill the viewer was tuned at, plus a GPU sort of 2.53M every
+   frame on top. No sort or bake knob touches that.
+
+   So the backing store gets a BUDGET in megapixels, and the ratio is scaled
+   down (never up) to meet it: ratio = min(ratio, sqrt(budget / cssArea)).
+   2.0 Mpx is "1080p": a 1080p monitor renders native (0.98), 1440p at 0.74 —
+   the 0.7 that was judged smooth on the device — and 4K at 0.49. The
+   compositor upscales the rest, which splats tolerate far better than polygon
+   edges do (they are already soft ellipses), and the hero card, captions and
+   dots are DOM and stay crisp regardless. It is exactly the trick SuperSplat
+   plays on phones, applied to the one place it never applied it.
+
+   The budget applies on EVERY resize (main.ts), because the same page is a
+   0.9 Mpx window one moment and an 8 Mpx fullscreen the next. It binds only
+   when it would lower the ratio, so the phone rules above are untouched: the
+   docked page's 0.59 Mpx is far under it. A floor of 0.5 stops an 8K panel
+   from being rendered at a quarter of its pixels; if that ever matters, the
+   budget is the number to raise, not the floor.
+
+   `?mpx=N` overrides the budget (0 = off, the old behaviour); `__mpx(n)` is
+   the console twin. `?res=N` still wins outright — it is an absolute ratio and
+   bypasses the budget, which is what makes it the honest A/B. */
+const RENDER_BUDGET_MPX = 2.0;
+const RENDER_RATIO_FLOOR = 0.5;
+let renderBudgetOverride: number | null = null;
+
+/** The budget in effect: `?mpx=N` / `__mpx(n)` if given, else the default. 0 = off. */
+export function renderBudgetMpx(): number {
+  if (renderBudgetOverride !== null) return renderBudgetOverride;
+  const raw = new URLSearchParams(window.location.search).get('mpx');
+  const n = Number(raw);
+  if (raw !== null && Number.isFinite(n) && n >= 0) return n;
+  return RENDER_BUDGET_MPX;
+}
+
+/** Set the budget live (console knob). Takes effect on the next re-decide (main.ts). */
+export function setRenderBudgetMpx(n: number): number {
+  renderBudgetOverride = Number.isFinite(n) && n >= 0 ? n : null;
+  return renderBudgetMpx();
+}
+
+/** Scale `ratio` down so cssW × cssH × ratio² stays inside the budget. */
+function budgetedRatio(ratio: number, cssWidth: number, cssHeight: number): number {
+  const budget = renderBudgetMpx();
+  if (!(budget > 0) || !(cssWidth > 0) || !(cssHeight > 0)) return ratio;
+  const cap = Math.sqrt((budget * 1e6) / (cssWidth * cssHeight));
+  return Math.min(ratio, Math.max(RENDER_RATIO_FLOOR, cap));
 }
 
 /* Physical pixels across the SHORT AXIS OF THE SCREEN that a phone is allowed
@@ -115,10 +185,13 @@ function defaultPixelRatio(perfScale: number): number {
  * createDevice for what each one is for). Exported because the docked phone
  * page has TWO canvases in one session — the square window, and the full
  * screen when the phone is turned sideways — and re-decides this on the
- * resize that flips between them (main.ts). The desktop answer is unaffected:
- * `defaultPixelRatio` returns 2 there regardless of the scale.
+ * resize that flips between them (main.ts). Since 2026-09-02 EVERY page
+ * re-decides on resize, because the render budget (above) depends on the
+ * canvas's CSS size: pass `cssWidth`/`cssHeight` and the ratio comes back
+ * scaled to the budget. Without them the budget cannot bind and the desktop
+ * answer is the old `min(dpr, 2)`.
  */
-export function targetPixelRatio(perfScale: number): number {
+export function targetPixelRatio(perfScale: number, cssWidth = 0, cssHeight = 0): number {
   const params = new URLSearchParams(window.location.search);
 
   const perfRaw = params.get('perf');
@@ -128,11 +201,12 @@ export function targetPixelRatio(perfScale: number): number {
       ? Math.min(perfParam, 2)
       : perfScale;
 
+  // ?res is absolute and deliberately bypasses the budget — see the note above.
   const resRaw = params.get('res');
   const resParam = Number(resRaw);
-  return resRaw !== null && Number.isFinite(resParam) && resParam > 0
-    ? Math.min(resParam, 4)
-    : defaultPixelRatio(scale);
+  if (resRaw !== null && Number.isFinite(resParam) && resParam > 0) return Math.min(resParam, 4);
+
+  return budgetedRatio(defaultPixelRatio(scale), cssWidth, cssHeight);
 }
 
 export async function createDevice(
@@ -223,7 +297,9 @@ export async function createDevice(
      exactly what came back from the phone. Only the CANVAS softens either way:
      the hero card, the captions and the dots are DOM and stay pixel-crisp.
 
-     Desktop keeps the old cap of 2. */
+     Desktop keeps the cap of 2 — and, since 2026-09-02, a 2.0 Mpx budget on
+     top of it, because "native up to DPR 2" is 8 Mpx on a 4K monitor. See the
+     render budget note above `renderBudgetMpx()`. */
   /* Two overrides, and they are not the same knob:
 
        ?res=N   the final ratio, outright. `?res=1` reproduces what shipped
@@ -237,7 +313,10 @@ export async function createDevice(
      Both read NaN-safely and clamped: a typo must not produce a zero-sized
      swapchain (see the ResizeObserver note in main.ts about what a 0x0 surface
      does to WebGPU). */
-  device.maxPixelRatio = Math.min(window.devicePixelRatio, targetPixelRatio(opts.perfScale ?? 0.5));
+  device.maxPixelRatio = Math.min(
+    window.devicePixelRatio,
+    targetPixelRatio(opts.perfScale ?? 0.5, opts.cssWidth ?? 0, opts.cssHeight ?? 0),
+  );
 
   const renderer: DeviceResult['renderer'] = device.isWebGPU ? 'webgpu' : 'webgl2';
   // Decided behavior: fall back SILENTLY (no "compatibility mode" label to the

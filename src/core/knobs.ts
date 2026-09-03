@@ -10,6 +10,7 @@
 import { CameraFrame, TONEMAP_NONE, type Application, type Entity } from 'playcanvas';
 import type { OrbitFlyCamera } from './camera';
 import type { PerfHud } from '../ui/perfhud';
+import type { AdaptiveResolution } from './adaptive';
 import {
   MOBILE_PRESET,
   LAST_PASS_PRESET,
@@ -38,6 +39,13 @@ export interface KnobDeps {
   setOrderUploadPath(p: 'direct' | 'pbo'): void;
   /** Hold colour re-bakes while a fly-in is in the air. */
   setHoldBakeInFlight(on: boolean): void;
+  /** The backing-store budget in megapixels (device.ts); re-decides the ratio and resizes. */
+  setRenderBudget(mpx: number): number;
+  getRenderBudget(): number;
+  /** The frame-time governor (adaptive.ts). */
+  adaptive(): AdaptiveResolution;
+  /** Put the governor's scale back to 1 and resize, for an A/B from the console. */
+  resetRenderScale(): void;
 }
 
 /** Read URL params, apply the ones present, and register the console handles. */
@@ -209,6 +217,35 @@ export function installKnobs(deps: KnobDeps): void {
     deps.setHoldBakeInFlight(Boolean(Number(on)));
   (window as unknown as { __pbo: (on: unknown) => void }).__pbo = (on) =>
     deps.setOrderUploadPath(Number(on) ? 'pbo' : 'direct');
+
+  /* ?mpx=N — the render budget, in megapixels of backing store (device.ts).
+     Parsed in device.ts alongside ?res and ?perf, since all three decide the
+     same number; this is only the console twin. `__mpx()` reports, `__mpx(3)`
+     sets and resizes on the spot, `__mpx(0)` turns the budget off — the
+     pre-2026-09-02 "native up to DPR 2" behaviour, for the A/B. Pair with
+     ?stats and read the Mpx / dpr line, which shows the ratio actually in
+     force rather than the one the monitor would like. */
+  (window as unknown as { __mpx: (n?: number) => number }).__mpx = (n) =>
+    n === undefined ? deps.getRenderBudget() : deps.setRenderBudget(Number(n));
+
+  /* ?adapt=0 / ?minfps=N — the frame-time governor (adaptive.ts), parsed in
+     main.ts where the governor is built. This is the console side:
+
+       __adapt()        report: scale, target, the current window's mean and
+                        length, how many frames a step up needs, whether it is
+                        paused, and why it last moved
+       __adapt(0)       stop it where it is (the scale stays)
+       __adapt(1)       let it run again
+       __adapt('reset') scale back to 1 and resize — the A/B for "what did
+                        it buy me", read against ?stats
+
+     The HUD's `res` reading is the same scale, live. */
+  (window as unknown as { __adapt: (a?: unknown) => unknown }).__adapt = (a) => {
+    const g = deps.adaptive();
+    if (a === 'reset') deps.resetRenderScale();
+    else if (a !== undefined) g.enabled = Boolean(Number(a));
+    return g.report();
+  };
 
   /* ---- The frame-time readout -----------------------------------------
      `?stats` from the URL, `__stats(1)` from a console. The URL form is the
