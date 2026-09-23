@@ -17,6 +17,9 @@ autoscene/__pycache__/
 *.ply
 *.psht
 *.spz.original
+# ...except the front page's stand-in rooms (3.3 MB each, generated, not captures).
+# They go when Studios B and C are scanned.
+!public/splats/*/placeholder.ply
 
 # Generated from src/demos.ts by autoscene/reachable.mjs. Regenerable in a
 # second, and stale the moment the walk region or a hero pose moves — so it is

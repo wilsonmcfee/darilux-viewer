@@ -1,0 +1,400 @@
+/* ============================================================
+   DESIGN TOKENS — shared with technology-capture-integration.html
+   ============================================================ */
+:root{
+  --paper:#efeae2;          /* JFTR cream */
+  --paper-lift:#f4f0ea;
+  --ink:23 19 15;           /* near-black, as RGB channels so alpha is easy */
+  --accent:#b8392e;
+  --shell:#14100c;          /* dark ground inside the viewer window */
+  --cream:239 234 226;      /* cream, for use on the dark shell */
+  --display:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+  --body:"EB Garamond",Georgia,"Times New Roman",serif;
+  --ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --page:68rem;
+}
+*{ box-sizing:border-box }
+html{ -webkit-text-size-adjust:100% }
+body{
+  margin:0; background:var(--paper); color:rgb(var(--ink));
+  font-family:var(--body); font-size:18px; line-height:1.62;
+  min-height:100vh; display:flex; flex-direction:column;
+}
+main{ flex:1 }
+.wrap{ width:min(var(--page), 100% - 32px); margin-inline:auto; }
+button{ font:inherit; color:inherit }
+:focus-visible{ outline:2px solid var(--accent); outline-offset:3px }
+
+/* ---- top bar: logo + technology link ---- */
+.topbar{ border-bottom:1px solid rgb(var(--ink) / .13); }
+.topbar .wrap{
+  display:flex; align-items:center; gap:clamp(16px, 3vw, 30px);
+  min-height:76px; padding-block:14px;
+}
+.brand{ display:block; line-height:0; flex:none; }
+.brand img{ display:block; height:28px; width:auto; }
+.doc-link{
+  display:inline-flex; align-items:center; gap:.75em;
+  font-family:var(--ui); font-size:10.5px; font-weight:500;
+  letter-spacing:.18em; text-transform:uppercase; line-height:1;
+  color:rgb(var(--ink)); text-decoration:none;
+  padding:.95em 1.15em; border:1px solid rgb(var(--ink) / .28);
+  transition:color .2s ease, border-color .2s ease, background-color .2s ease;
+}
+.doc-link:hover{ color:var(--accent); border-color:var(--accent); background:rgb(184 57 46 / .04); }
+.doc-link-arrow{
+  width:11px; height:11px; flex:none;
+  fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round;
+  transition:transform .2s ease;
+}
+.doc-link:hover .doc-link-arrow{ transform:translateX(2px) }
+.doc-link-short{ display:none }
+@media (max-width:560px){
+  .brand img{ height:22px }
+  .doc-link{ letter-spacing:.14em; padding:.9em 1em }
+  .doc-link-full{ display:none }
+  .doc-link-short{ display:inline }
+}
+
+/* ---- intro ---- */
+.intro{ padding:clamp(2.8rem, 8vw, 5.5rem) 0 clamp(1.8rem, 4vw, 2.6rem); }
+.eyebrow{
+  font-family:var(--ui); font-size:10.5px; font-weight:500;
+  letter-spacing:.22em; text-transform:uppercase; color:rgb(var(--ink) / .5);
+  margin:0 0 1.4rem;
+}
+h1{
+  font-family:var(--display); font-weight:300; letter-spacing:-.005em;
+  font-size:clamp(2.3rem, 6vw, 3.5rem); line-height:1.06; margin:0 0 .6rem;
+}
+.lead{ font-size:1.16rem; margin:0; max-width:36rem; }
+
+/* ---- studio labels ---- */
+.studios{
+  display:grid; grid-template-columns:repeat(3, 1fr); gap:1px;
+  background:rgb(var(--ink) / .14); border:1px solid rgb(var(--ink) / .14);
+}
+.studio{
+  appearance:none; -webkit-appearance:none; border:0; margin:0; border-radius:0;
+  position:relative; display:grid; gap:.35rem; align-content:start;
+  padding:1.3rem 1.4rem 1.25rem; background:var(--paper);
+  text-align:left; cursor:pointer;
+  transition:background-color .2s ease;
+}
+.studio::before{
+  content:""; position:absolute; left:-1px; right:-1px; top:-1px; height:2px;
+  background:var(--accent); transform:scaleX(0); transform-origin:left;
+  transition:transform .35s cubic-bezier(.2,.85,.15,1);
+}
+.studio:hover{ background:var(--paper-lift) }
+.studio[aria-pressed="true"]::before{ transform:scaleX(1) }
+.studio-kicker{
+  font-family:var(--ui); font-size:10.5px; font-weight:500;
+  letter-spacing:.2em; text-transform:uppercase; color:rgb(var(--ink) / .5);
+}
+.studio-letter{
+  font-family:var(--display); font-weight:300; line-height:.9;
+  font-size:clamp(3rem, 9vw, 5.4rem); transition:color .25s ease;
+}
+.studio[aria-pressed="true"] .studio-letter{ color:var(--accent) }
+.studio-status{
+  display:flex; align-items:center; gap:.6em;
+  font-family:var(--ui); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:rgb(var(--ink) / .45);
+}
+.studio-status::before{
+  content:""; width:5px; height:5px; border-radius:50%; flex:none;
+  background:rgb(var(--ink) / .3);
+}
+.studio[data-live] .studio-status::before{ background:var(--accent) }
+@media (max-width:560px){
+  .studio{ padding:1rem .9rem 1rem }
+  .studio-status{ font-size:9px; letter-spacing:.1em; }
+}
+
+/* ============================================================
+   VIEWER WINDOW — a dark panel set into the page
+   ============================================================ */
+.window{
+  margin:clamp(1.6rem, 4vw, 2.4rem) auto clamp(3rem, 8vw, 5rem);
+  /* 4:3, but never taller than the screen, so the whole window is visible once opened */
+  width:min(100%, (100vh - 150px) * 4 / 3);
+  width:min(100%, (100svh - 150px) * 4 / 3);
+}
+@media (max-width:700px){ .window{ width:100% } }
+.window.is-open{ animation:rise .5s cubic-bezier(.2,.85,.15,1) both }
+@keyframes rise{ from{ opacity:0; transform:translateY(10px) } to{ opacity:1; transform:none } }
+
+.panel{
+  position:relative; overflow:hidden; outline:none;
+  aspect-ratio:4 / 3; background:var(--shell);
+  border:1px solid rgb(var(--ink) / .2);
+  box-shadow:0 1px 0 rgb(var(--cream) / .05) inset;
+  -webkit-user-select:none; user-select:none;
+}
+@media (max-width:700px){ .panel{ aspect-ratio:4 / 5 } }
+.panel:fullscreen{ aspect-ratio:auto; width:100%; height:100%; border:0 }
+.panel[data-state="inside"]{ touch-action:none; cursor:grab }
+.panel.is-dragging{ cursor:grabbing }
+.panel canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+/* ---- the gate: poster + "click to enter" ---- */
+.gate{
+  appearance:none; -webkit-appearance:none; border:0; padding:0; margin:0; border-radius:0;
+  position:absolute; inset:0; width:100%; cursor:pointer; background:var(--shell);
+  color:rgb(var(--cream)); display:grid; place-items:center; text-align:center;
+  transition:opacity .7s ease, visibility 0s linear 0s;
+}
+.gate:disabled{ cursor:default }
+.panel[data-state="inside"] .gate{ opacity:0; visibility:hidden; transition:opacity .7s ease, visibility 0s linear .7s; }
+.panel[data-state="loading"] .gate{ cursor:progress }
+
+.gate-art{
+  position:absolute; inset:0; overflow:hidden;
+  background:
+    radial-gradient(120% 90% at 50% 110%, rgb(var(--cream) / .07), transparent 60%),
+    linear-gradient(rgb(var(--cream) / .035) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(90deg, rgb(var(--cream) / .035) 1px, transparent 1px) 0 0 / 48px 48px,
+    var(--shell);
+}
+.gate-art.has-poster{
+  background:var(--poster) center / cover no-repeat, var(--shell);
+}
+.gate-art.has-poster::after{
+  content:""; position:absolute; inset:0;
+  background:
+    radial-gradient(80% 70% at 50% 50%, rgb(20 16 12 / .35), rgb(20 16 12 / .72)),
+    rgb(20 16 12 / .2);
+}
+.gate-letter{
+  position:absolute; left:50%; top:50%; transform:translate(-50%, -54%);
+  font-family:var(--display); font-weight:300; line-height:1;
+  font-size:min(68vh, 34vw); color:rgb(var(--cream) / .045);
+}
+.gate-art.has-poster .gate-letter{ display:none }
+
+.gate-body{
+  position:relative; display:grid; justify-items:center; gap:.9rem; padding:24px;
+  transition:opacity .3s ease, transform .5s cubic-bezier(.2,.85,.15,1);
+}
+.panel[data-state="loading"] .gate-body,
+.panel[data-state="inside"] .gate-body{ opacity:0; transform:translateY(6px) }
+.gate-kicker{
+  font-family:var(--ui); font-size:10.5px; font-weight:500;
+  letter-spacing:.22em; text-transform:uppercase; color:rgb(var(--cream) / .62);
+}
+.gate-title{
+  font-family:var(--display); font-weight:300; line-height:1.08;
+  font-size:clamp(1.9rem, 4.4vw, 3rem); max-width:18ch;
+}
+.gate-ring{
+  width:58px; height:58px; border-radius:50%; margin-top:.3rem;
+  display:grid; place-items:center;
+  border:1px solid rgb(var(--cream) / .38);
+  transition:border-color .25s ease, background-color .25s ease, transform .35s cubic-bezier(.2,.85,.15,1);
+}
+.gate-ring svg{
+  width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.4;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+.gate:hover .gate-ring, .gate:focus-visible .gate-ring{
+  border-color:var(--accent); background:var(--accent); transform:scale(1.06);
+}
+.gate:focus-visible{ outline-offset:-4px }
+.gate-note{
+  font-family:var(--ui); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
+  color:rgb(var(--cream) / .42); max-width:34rem; line-height:1.6;
+}
+.gate-note:empty{ display:none }
+.panel[data-state="error"] .gate-note,
+.panel[data-state="unsupported"] .gate-note{ text-transform:none; letter-spacing:.02em; font-size:13px; color:rgb(var(--cream) / .6) }
+.panel[data-state="unsupported"] .gate-ring{ display:none }
+
+/* ---- loading ---- */
+.loader{
+  position:absolute; left:50%; top:50%; transform:translate(-50%, -50%);
+  width:min(260px, 100% - 48px); display:grid; gap:.8rem; justify-items:center;
+  color:rgb(var(--cream)); pointer-events:none;
+  opacity:0; visibility:hidden; transition:opacity .3s ease, visibility 0s linear .3s;
+}
+.panel[data-state="loading"] .loader{ opacity:1; visibility:visible; transition:opacity .3s ease .1s, visibility 0s }
+.loader-label{
+  font-family:var(--ui); font-size:10.5px; font-weight:500;
+  letter-spacing:.22em; text-transform:uppercase; color:rgb(var(--cream) / .7);
+}
+.loader-track{ position:relative; width:100%; height:2px; background:rgb(var(--cream) / .14); overflow:hidden; }
+.loader-fill{
+  position:absolute; inset:0; background:var(--accent);
+  transform-origin:left; transform:scaleX(0); transition:transform .25s ease;
+}
+.panel[data-phase="stream"] .loader-fill{
+  transform:none; transition:none; width:35%;
+  animation:sweep 1.3s cubic-bezier(.45,0,.55,1) infinite;
+}
+@keyframes sweep{ from{ transform:translateX(-100%) } to{ transform:translateX(290%) } }
+.loader-pct{
+  font-family:var(--ui); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:rgb(var(--cream) / .45); font-variant-numeric:tabular-nums;
+}
+
+/* ---- in-room controls ---- */
+.hud{
+  position:absolute; top:12px; right:12px; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;
+  opacity:0; visibility:hidden; transition:opacity .4s ease, visibility 0s linear .4s;
+}
+.panel[data-state="inside"] .hud{ opacity:1; visibility:visible; transition:opacity .4s ease .5s, visibility 0s }
+.hud button{
+  appearance:none; -webkit-appearance:none; cursor:pointer; border-radius:0;
+  font-family:var(--ui); font-size:10px; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
+  color:rgb(var(--cream) / .86); padding:.85em 1.05em; line-height:1;
+  background:rgb(20 16 12 / .62); border:1px solid rgb(var(--cream) / .18);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  transition:color .2s ease, border-color .2s ease, background-color .2s ease;
+}
+.hud button:hover{ color:rgb(var(--cream)); border-color:var(--accent); background:rgb(184 57 46 / .85) }
+.hud button[hidden]{ display:none }
+
+@media (pointer:coarse){ .hud button{ padding:1em 1.05em } }
+
+/* ---- pointer lock (desktop): click the view to look, Esc hands the cursor back ---- */
+.panel.can-lock[data-state="inside"]{ cursor:default }
+/* while the mouse is the head the buttons can't be reached anyway, so the view goes clean */
+.panel.is-locked[data-state="inside"] .hud{ opacity:0; visibility:hidden; transition:opacity .3s ease, visibility 0s linear .3s; }
+
+/* The iris: a soft vignette that closes in from the edges around the prompt while the mouse is
+   free, and opens back out into the sides of the frame once it's taken. --iris is where the
+   darkness is fully in, measured to the corners: 60% stops it right down to a small clear pupil
+   around the words, 260% leaves only a faint shading at the edges. Registered so the gradient
+   itself can animate. */
+@property --iris{ syntax:'<percentage>'; inherits:false; initial-value:260%; }
+.iris{
+  --iris:260%;
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:radial-gradient(circle farthest-corner at 50% 50%,
+    rgb(20 16 12 / 0)   calc(var(--iris) * .2),
+    rgb(20 16 12 / .28) calc(var(--iris) * .36),
+    rgb(20 16 12 / .6)  calc(var(--iris) * .52),
+    rgb(20 16 12 / .84) calc(var(--iris) * .68),
+    rgb(20 16 12 / .95) calc(var(--iris) * .84),
+    rgb(20 16 12 / .98) var(--iris));
+  /* opening: a fast burst outward, then a long settle into the sides of the frame */
+  transition:--iris 1.8s cubic-bezier(.16,1,.3,1), opacity .6s ease;
+}
+.panel.can-lock[data-state="inside"] .iris{ opacity:1 }
+.panel.can-lock[data-state="inside"]:not(.is-locked) .iris{
+  --iris:60%;
+  /* closing (after Esc): slow in, slow out, like an iris stopping down */
+  transition:--iris 1.3s cubic-bezier(.65,0,.35,1), opacity .6s ease;
+}
+/* while the room loads the iris shuts at once, out of sight under the gate, so the room is
+   revealed through the pupil rather than the iris closing on arrival */
+.panel.can-lock[data-state="loading"] .iris{ --iris:60%; opacity:1; transition:none; }
+
+/* the prompt is just the words, breathing in the pupil */
+.look-cta{
+  appearance:none; -webkit-appearance:none; margin:0; border:0; border-radius:0; background:none; cursor:pointer;
+  position:absolute; left:50%; top:50%; transform:translate(-50%, -50%);
+  padding:1.6em 2em; white-space:nowrap;
+  font-family:var(--ui); font-size:12px; font-weight:500; letter-spacing:.34em; text-transform:uppercase; line-height:1;
+  color:rgb(var(--cream));
+  /* legible on a bright wall: a tight dark edge keeps the letterforms, a wide soft falloff
+     lifts them off the surface behind */
+  text-shadow:
+    0 0 1px rgb(20 16 12 / .7),
+    0 1px 3px rgb(20 16 12 / .6),
+    0 0 12px rgb(20 16 12 / .55),
+    0 0 28px rgb(20 16 12 / .4);
+  opacity:0; visibility:hidden;
+  /* leaving: gone before the iris has opened far */
+  transition:opacity .2s ease, visibility 0s linear .2s;
+}
+/* letter-spacing trails the last letter; this pulls the words back to true centre */
+.look-cta-label{ display:block; margin-right:-.34em; position:relative; z-index:0; }
+/* a feathered pool of shade behind the words, no edge to it; it breathes with them */
+.look-cta-label::before{
+  content:""; position:absolute; z-index:-1; inset:-2.6em -3.4em -2.6em -3.1em;
+  background:radial-gradient(closest-side, rgb(20 16 12 / .55), rgb(20 16 12 / .3) 50%, rgb(20 16 12 / .1) 78%, rgb(20 16 12 / 0));
+  pointer-events:none;
+}
+.panel.can-lock[data-state="inside"]:not(.is-locked) .look-cta{
+  opacity:1; visibility:visible;
+  /* arriving: as the gate lifts on entry, or once the iris has mostly closed after Esc */
+  transition:opacity .8s ease .6s, visibility 0s;
+}
+/* a slow sine of opacity: ease-in-out-sine each way, alternating, so one full breath is 5.2 s */
+.panel.can-lock[data-state="inside"]:not(.is-locked) .look-cta-label{
+  animation:look-breathe 2.6s cubic-bezier(.37,0,.63,1) 1.7s infinite alternate both;
+}
+@keyframes look-breathe{
+  from{ opacity:1 }
+  to{ opacity:.22 }
+}
+.look-cta:hover .look-cta-label, .look-cta:focus-visible .look-cta-label{ animation:none; opacity:1 }
+.look-cta:focus-visible{ outline-offset:-6px }
+
+.look-hint{
+  position:absolute; left:50%; bottom:16px; transform:translate(-50%, 4px);
+  font-family:var(--ui); font-size:10px; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
+  line-height:1; white-space:nowrap; color:rgb(var(--cream) / .9);
+  padding:.85em 1.1em; background:rgb(20 16 12 / .62); border:1px solid rgb(var(--cream) / .18);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  pointer-events:none; opacity:0; transition:opacity .35s ease, transform .35s ease;
+}
+.look-hint.is-visible{ opacity:1; transform:translate(-50%, 0) }
+
+/* ============================================================
+   FULL-SCREEN PHONE VIEW — the canvas and nothing else but a
+   translucent walk stick (bottom left) and a small exit
+   ============================================================ */
+html.is-immersive, html.is-immersive body{ overflow:hidden; overscroll-behavior:none; }
+/* the reveal animation's fill leaves a transform on .window, which would trap the fixed panel */
+html.is-immersive .window{ animation:none; transform:none; }
+.panel.is-immersive{
+  position:fixed; inset:0; z-index:100;
+  width:100%; height:100vh; height:100dvh; aspect-ratio:auto;
+  border:0; box-shadow:none;
+}
+.panel.is-immersive .hud{ display:none }
+
+/* walk stick: fixed in the corner, a press anywhere near it grabs it (see walk-controls.js) */
+.stick{
+  position:absolute; display:none; pointer-events:none;
+  left:calc(28px + env(safe-area-inset-left)); bottom:calc(32px + env(safe-area-inset-bottom));
+  width:112px; height:112px; border-radius:50%;
+  border:1px solid rgb(var(--cream) / .22); background:rgb(var(--cream) / .06);
+  -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+  opacity:.7; transition:opacity .2s ease;
+}
+.stick.is-active{ opacity:1 }
+.stick-knob{
+  position:absolute; left:50%; top:50%; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%;
+  background:rgb(var(--cream) / .38); border:1px solid rgb(var(--cream) / .3);
+}
+.stick.is-active .stick-knob{ background:rgb(var(--cream) / .55) }
+.panel.is-immersive[data-state="inside"] .stick{ display:block }
+
+.exit{
+  appearance:none; -webkit-appearance:none; margin:0; padding:0; cursor:pointer;
+  position:absolute; display:none; place-items:center;
+  top:calc(14px + env(safe-area-inset-top)); right:calc(14px + env(safe-area-inset-right));
+  width:40px; height:40px; border-radius:50%;
+  color:rgb(var(--cream) / .85); background:rgb(20 16 12 / .28); border:1px solid rgb(var(--cream) / .2);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+}
+.exit svg{ width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; }
+.panel.is-immersive .exit{ display:grid }
+
+/* ---- caption under the window ---- */
+.window figcaption{
+  display:flex; justify-content:space-between; gap:1.4rem; align-items:baseline;
+  border-top:1px solid rgb(var(--ink) / .14); margin-top:.55rem; padding-top:.6rem;
+  font-family:var(--ui); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase;
+  color:rgb(var(--ink) / .5);
+}
+.window figcaption .state{ color:var(--accent); white-space:nowrap; }
+@media (max-width:560px){ .window figcaption{ flex-direction:column; gap:.3rem } }
+
+
+@media (prefers-reduced-motion:reduce){
+  *, *::before, *::after{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+}

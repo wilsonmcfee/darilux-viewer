@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio Viewer — Darilux Studio</title>
+<meta name="description" content="Walk through photoreal 3D scans of the Just For The Record studios.">
+<link rel="icon" href="assets/darilux-logotype.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/site.css">
+<script type="importmap">
+{ "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@2.22.3/build/playcanvas.min.mjs" } }
+</script>
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="Darilux Studio — home">
+      <img src="assets/darilux-logotype.svg" alt="Darilux" width="580" height="130">
+    </a>
+    <a class="doc-link" href="technology-capture-integration.html">
+      <span class="doc-link-full">Technology, Capture &amp; Integration</span>
+      <span class="doc-link-short">Technology &amp; Capture</span>
+      <svg class="doc-link-arrow" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8M6.5 2.5 10 6l-3.5 3.5"/></svg>
+    </a>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="intro">
+    <p class="eyebrow">Just For The Record · Interactive 3D Capture</p>
+    <h1>The Studios</h1>
+    <p class="lead">Choose a room, then click into the window to step inside and walk around.</p>
+  </section>
+
+  <nav class="studios" id="studio-labels" aria-label="Studios"></nav>
+
+  <figure class="window" id="viewer-window" hidden>
+    <div class="panel" id="viewer-panel" tabindex="-1" data-state="gate">
+      <canvas id="viewer-canvas"></canvas>
+      <!-- under the gate, so it's already closed when the gate lifts off the room -->
+      <div class="iris" aria-hidden="true"></div>
+
+      <button class="gate" id="viewer-gate" type="button">
+        <span class="gate-art" aria-hidden="true"><span class="gate-letter"></span></span>
+        <span class="gate-body">
+          <span class="gate-kicker"></span>
+          <span class="gate-title">Click to enter</span>
+          <span class="gate-ring" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></svg>
+          </span>
+          <span class="gate-note"></span>
+        </span>
+      </button>
+
+      <div class="loader" role="status" aria-live="polite">
+        <span class="loader-label">Loading</span>
+        <span class="loader-track"><span class="loader-fill"></span></span>
+        <span class="loader-pct">0%</span>
+      </div>
+
+      <button class="look-cta" type="button" data-action="look">
+        <span class="look-cta-label">Click to look around</span>
+      </button>
+
+      <div class="hud">
+        <button type="button" data-action="reset">Reset view</button>
+        <button type="button" data-action="fullscreen">Full screen</button>
+        <button type="button" data-action="leave">Leave room</button>
+      </div>
+      <div class="look-hint" aria-hidden="true">Esc to release the mouse</div>
+
+      <div class="stick" aria-hidden="true"><span class="stick-knob"></span></div>
+      <button class="exit" type="button" data-action="leave" aria-label="Leave room">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+      </button>
+    </div>
+    <figcaption>
+      <span id="viewer-caption"></span>
+      <span class="state" id="viewer-state"></span>
+    </figcaption>
+  </figure>
+</main>
+
+</body>
+</html>

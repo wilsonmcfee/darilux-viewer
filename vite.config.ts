@@ -24,9 +24,13 @@ export default defineConfig({
          not worth a broken one.
 
          lab.html is deliberately NOT listed: it is a work-in-progress scratch
-         page, and listing it here would publish it. Add it when it is ready. */
+         page, and listing it here would publish it. Add it when it is ready.
+
+         There is no `index` entry: the front page is the JFTR studio viewer, a
+         vanilla-JS site with no build step that lives whole in public/ (see
+         public/index.html) and is copied to dist/ untouched. Listing a root
+         index.html here as well would fight it for dist/index.html. */
       input: {
-        index: resolve(__dirname, 'index.html'),
         bluedio: resolve(__dirname, 'bluedio.html'),
         // The docked phone layout — scene in a 4:3 window, controls underneath.
         // Deliberately a THIRD page rather than a replacement: bluedio.html is

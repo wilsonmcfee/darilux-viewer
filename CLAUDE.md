@@ -87,9 +87,16 @@ it ships nothing and cannot rot) and follow `TEMPLATE.md` step by step.
 
 Vite builds **only** the pages listed in `build.rollupOptions.input` in
 `vite.config.ts`. A page missing from that map works perfectly under
-`npm run dev` and silently vanishes from `dist/`. Currently listed: `index.html`
-(the JFTR reel), `bluedio.html` (standalone), `bluedio-phone.html` (docked
-phone layout).
+`npm run dev` and silently vanishes from `dist/`. Currently listed:
+`bluedio.html` (standalone) and `bluedio-phone.html` (docked phone layout).
+
+The front page is **not** a Vite entry. `public/index.html` is the JFTR studio
+viewer — vanilla JS, PlayCanvas from a CDN import map, no build step — and
+lives whole in `public/` (`css/`, `js/`, `assets/`, `splats/`,
+`technology-capture-integration.html`), copied to `dist/` untouched. Its room
+list is `public/js/studios.js`. Do not add a root `index.html` entry back: it
+would fight `public/index.html` for `dist/index.html`. The previous front page
+(the reel) is at the git tag `bluedio`.
 
 - `lab.html` is **deliberately unlisted** — it is a local scratch page, and
   listing it would publish it. Add it only when it is ready to be seen.

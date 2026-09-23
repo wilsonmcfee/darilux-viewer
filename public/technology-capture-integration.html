@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Technology, Capture, and Integration — Darilux Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500&display=swap">
+<style>
+/* ============================================================
+   DESIGN TOKENS — the whole page is themed from this list.
+   ============================================================ */
+:root{
+  --paper:#efeae2;          /* JFTR cream */
+  --ink:23 19 15;           /* near-black, as RGB channels so alpha is easy */
+  --accent:#b8392e;
+  --shell:#14100c;          /* dark ground inside the viewer windows */
+  --cream:239 234 226;      /* cream, for use on the dark shell */
+  --display:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+  --body:"EB Garamond",Georgia,"Times New Roman",serif;
+  --ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --measure:44rem;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--paper); color:rgb(var(--ink));
+  font-family:var(--body); font-size:18px; line-height:1.62;
+}
+.wrap{ width:min(var(--measure),92vw); margin:0 auto; }
+
+/* ---- type ---- */
+h1,h2,h3{ font-family:var(--display); font-weight:400; letter-spacing:-.005em; }
+h1{ font-size:clamp(2.3rem,6vw,3.5rem); line-height:1.06; margin:0 0 .6rem; font-weight:300; }
+h2{ font-size:clamp(1.85rem,4.4vw,2.6rem); line-height:1.12; margin:0; font-weight:300; }
+h3{ font-size:1.32rem; line-height:1.25; margin:2.6rem 0 .7rem; }
+p{ margin:0 0 1.1rem; }
+.lead{ font-size:1.16rem; }
+.eyebrow{
+  font-family:var(--ui); font-size:10.5px; font-weight:500;
+  letter-spacing:.22em; text-transform:uppercase; color:rgb(var(--ink) / .5);
+  margin:0 0 1.4rem;
+}
+em{ font-style:italic }
+strong{ font-weight:500 }
+a{ color:var(--accent); text-decoration:none; border-bottom:1px solid rgb(var(--ink) / .2) }
+
+/* ---- page furniture ---- */
+header.masthead{ padding:clamp(3.5rem,10vw,7rem) 0 2.2rem; }
+header.masthead .rule{ height:1px; background:rgb(var(--ink) / .18); margin-top:2.4rem; }
+.byline{
+  font-family:var(--ui); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  color:rgb(var(--ink) / .45); margin-top:1.6rem;
+}
+section.band{ padding:clamp(3rem,8vw,5.5rem) 0; border-top:1px solid rgb(var(--ink) / .13); }
+section.band:first-of-type{ border-top:0 }
+.sec-head{ display:flex; align-items:baseline; gap:1.1rem; margin-bottom:1.8rem; }
+.sec-num{
+  font-family:var(--display); font-size:clamp(1.85rem,4.4vw,2.6rem); font-weight:300;
+  color:var(--accent); line-height:1;
+}
+footer{
+  border-top:1px solid rgb(var(--ink) / .13); padding:2.6rem 0 4rem;
+  font-family:var(--ui); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+  color:rgb(var(--ink) / .42);
+}
+
+/* ---- lists ---- */
+ul.plain{ list-style:none; padding:0; margin:0 0 1.2rem; }
+ul.plain li{ padding-left:1.35rem; position:relative; margin-bottom:.7rem; }
+ul.plain li::before{
+  content:""; position:absolute; left:0; top:.72em;
+  width:5px; height:5px; border-radius:50%; background:rgb(var(--ink) / .32);
+}
+ol.steps{ list-style:none; counter-reset:s; padding:0; margin:0 0 1.2rem; }
+ol.steps li{ counter-increment:s; padding-left:2.4rem; position:relative; margin-bottom:.75rem; }
+ol.steps li::before{
+  content:counter(s,decimal-leading-zero); position:absolute; left:0; top:.3em;
+  font-family:var(--ui); font-size:10.5px; font-weight:500; letter-spacing:.12em;
+  color:var(--accent);
+}
+
+/* ---- method comparison cards ---- */
+.cards{ display:grid; gap:1px; background:rgb(var(--ink) / .14);
+        border:1px solid rgb(var(--ink) / .14); margin:1.8rem 0 1.4rem; }
+@media (min-width:800px){ .cards{ grid-template-columns:repeat(3,1fr) } }
+.card{ background:var(--paper); padding:1.5rem 1.4rem; }
+.card h4{
+  font-family:var(--ui); font-size:10.5px; font-weight:500; letter-spacing:.18em;
+  text-transform:uppercase; margin:0 0 1rem; color:rgb(var(--ink) / .55);
+}
+.card.is-ours h4{ color:var(--accent) }
+.card dl{ margin:0; font-size:.95rem; }
+.card dt{
+  font-family:var(--ui); font-size:9.5px; font-weight:500; letter-spacing:.16em;
+  text-transform:uppercase; color:rgb(var(--ink) / .4); margin-top:.9rem;
+}
+.card dt:first-child{ margin-top:0 }
+.card dd{ margin:.2rem 0 0; line-height:1.5; }
+
+/* ---- table ---- */
+.table-scroll{ overflow-x:auto; margin:1.6rem 0 1.4rem; }
+table{ border-collapse:collapse; width:100%; min-width:34rem; font-size:.95rem; }
+th,td{ text-align:left; padding:.72rem .9rem; border-bottom:1px solid rgb(var(--ink) / .12); vertical-align:top; }
+thead th{
+  font-family:var(--ui); font-size:9.5px; font-weight:500; letter-spacing:.16em;
+  text-transform:uppercase; color:rgb(var(--ink) / .5);
+  border-bottom:1px solid rgb(var(--ink) / .3);
+}
+tbody th{ font-family:var(--body); font-weight:500; width:11rem; }
+
+/* ============================================================
+   VIEWER WINDOWS — the dark panels the animations live inside
+   ============================================================ */
+figure.window{ margin:2rem 0 1.6rem; }
+.window .panel{
+  background:var(--shell); border:1px solid rgb(var(--ink) / .2);
+  padding:.4rem .6rem 0; box-shadow:0 1px 0 rgb(var(--cream) / .05) inset;
+}
+.window svg{ display:block; width:100%; height:auto; }
+.window figcaption{
+  display:flex; justify-content:space-between; gap:1.4rem; align-items:baseline;
+  border-top:1px solid rgb(var(--ink) / .14); margin-top:.55rem; padding-top:.6rem;
+  font-family:var(--ui); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase;
+  color:rgb(var(--ink) / .5);
+}
+.window figcaption .state{ color:var(--accent); white-space:nowrap; }
+
+/* ---- shared marks inside the panels ---- */
+.edge{ fill:none; stroke:rgb(var(--cream) / .32); stroke-width:1.1; stroke-linejoin:round; }
+.edge--soft{ stroke:rgb(var(--cream) / .17); }
+.edge--cut{ stroke:rgb(var(--cream) / .15); stroke-dasharray:4 5; }
+.floor{ fill:rgb(var(--cream) / .045); }
+.face--top{ fill:rgb(var(--cream) / .085) }
+.face--front{ fill:rgb(var(--cream) / .055) }
+.face--side{ fill:rgb(var(--cream) / .028) }
+.baffle{ fill:none; stroke:rgb(var(--cream) / .16); stroke-width:1 }
+.driver{ fill:none; stroke:rgb(var(--cream) / .34); stroke-width:1.1 }
+.driver--soft{ stroke:rgb(var(--cream) / .2) }
+
+.path{
+  fill:none; stroke:rgb(var(--cream) / .25); stroke-width:2.4;
+  stroke-linecap:round; transition:stroke .5s ease;
+}
+.path.is-active{ stroke:rgb(var(--cream) / .74) }
+.path--room{ stroke-dasharray:2 10; animation:march 2.4s linear infinite }
+.path--hero{ stroke-dasharray:2 6;  animation:march-tight 1.9s linear infinite }
+@keyframes march{ to{ stroke-dashoffset:-12 } }
+@keyframes march-tight{ to{ stroke-dashoffset:-8 } }
+.path-end{ fill:none; stroke:rgb(var(--cream) / .22); stroke-width:1.1 }
+
+.tag{
+  fill:rgb(var(--cream) / .28); font-family:var(--ui); font-size:11px; font-weight:500;
+  letter-spacing:.15em; text-transform:uppercase; transition:fill .5s ease;
+}
+.tag.is-active{ fill:rgb(var(--cream) / .66) }
+
+.cone{ fill:var(--accent); opacity:.17 }
+.cam{ fill:var(--accent) }
+.cam-halo{ fill:none; stroke:var(--accent); stroke-width:1.3; opacity:.45 }
+
+/* ---- the splat convergence ---- */
+.splat{
+  fill:rgb(var(--cream) / 1);
+  transform-box:fill-box; transform-origin:center;
+  opacity:.07;
+  transform:translate(var(--dx),var(--dy)) scale(var(--sc));
+  transition:transform 2.7s cubic-bezier(.2,.85,.15,1) var(--d),
+             opacity   2.7s ease var(--d);
+}
+.is-trained .splat{ transform:none; opacity:var(--o) }
+
+@media (prefers-reduced-motion:reduce){
+  .path--room,.path--hero{ animation:none }
+  .splat{ transition:none }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Darilux Studio · Interactive 3D Capture</p>
+    <h1>Technology,&nbsp;Capture,<br>and&nbsp;Integration</h1>
+    <p class="lead">How photoreal 3D capture works, how your rooms will be shot, and how the
+      finished experience becomes part of your website rather than a link away from it.</p>
+    <p class="byline">Prepared for Just For The Record · Sun Valley, Los Angeles · August 2026</p>
+    <div class="rule"></div>
+  </div>
+</header>
+
+<!-- ============================ 01 ============================ -->
+<section class="band">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Technology</h2></div>
+
+    <p class="lead">Gaussian splatting is the reason photoreal 3D suddenly runs in an ordinary
+      browser tab. It is worth a few paragraphs, because how it works explains both why it looks
+      the way it does and where it has honest limits.</p>
+
+    <h3>What a splat actually is</h3>
+    <p>A conventional 3D model is built from polygons, typically flat triangles with a photograph stretched
+      over them. A Gaussian splat is built from millions of soft, translucent, lens-shaped blobs.
+      Each blob stores a position, a size and orientation, an opacity, and a color that changes depending on the viewing angle.</p>
+    <p>That last property is what makes 3DGS perfect for photorealistic recreations. A
+      lacquered panel, a polished 1176 faceplate, the sheen along a speaker cone: those surfaces do
+      not have one color, they have a colour per viewing angle. A splat can accurately recreate that.
+      </p>
+
+    <figure class="window" id="fig-splat">
+      <div class="panel"><svg id="viz-splat" role="img"
+        aria-label="A diffuse cloud of soft circles converging into the recognisable form of a studio monitor, then dispersing again."></svg></div>
+      <figcaption>
+        <span>Training — an unconstrained cloud resolving into geometry</span>
+        <span class="state" id="splat-state">random initialisation</span>
+      </figcaption>
+    </figure>
+
+    <h3>A scan is grown from points then corrected</h3>
+    <p>The animation above is close to literal. A splat scene is not assembled from your
+      photographs; it is repeatedly corrected against them.</p>
+    <ol class="steps">
+      <li><strong>Seed.</strong> A rough cloud of points recovered from a camera solve. Every
+        point becomes a blob. It looks like a typical pointcloud.</li>
+      <li><strong>Train.</strong> The renderer draws what the current cloud would look like from camera positions.</li>
+      <li><strong>Compare.</strong> That guess is measured against the actual photograph taken
+        from that position.</li>
+      <li><strong>Assign.</strong> Because the renderer is differentiable, errors can be
+        traced back to which blobs caused it. Each one is nudged a fraction closer to the solve.</li>
+      <li><strong>Densify.</strong> Where error stays stubborn, blobs split to add resolution;
+        blobs contributing nothing are deleted.</li>
+    </ol>
+    <p>This process then repeats tens of thousands of times, across every photograph at once. The best way to think about it is like this: <em>the photographs are an answer key for the gaussians to train against.</em> The optimiser is hunting for one arrangement of blobs that satisfies every
+      photograph simultaneously. Anything that makes two photographs disagree about the same
+      surface (a light that shifted, a soft frame, a reflection that slid across a panel) is a
+      contradiction it must resolve, and it usually resolves it by inventing geometry that was
+      never there. An accurate and controlled capture reduces these contradictions, but may not eliminate them entirely. </p>
+
+    <h3>How it differs from Photogrammetry and LiDAR</h3>
+    <div class="cards">
+      <div class="card">
+        <h4>Photogrammetry</h4>
+        <dl>
+          <dt>Solves for</dt><dd>A polygon mesh with a flat photographic texture baked onto it.</dd>
+          <dt>Strong at</dt><dd>Hard, matte, evenly lit geometry. Produces a measurable model that drops into CAD.</dd>
+          <dt>Struggles with</dt><dd>One colour per point of surface, so sheen and reflection bake in like paint. Thin objects — mic stands, cable runs, grille cloth — go blobby or vanish. Heavy file size because of resolution</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h4>LiDAR</h4>
+        <dl>
+          <dt>Solves for</dt><dd>Geometry directly. It fires a laser and times the return, which creates an accurate measurement of geometry.</dd>
+          <dt>Strong at</dt><dd>Darkness, featureless surfaces, and dimensional accuracy.</dd>
+          <dt>Struggles with</dt><dd>Appearance is captured separately. Color comes from a small panoramic camera spreading its resolution across a whole sphere. The output is a point cloud, not a space.</dd>
+        </dl>
+      </div>
+      <div class="card is-ours">
+        <h4>Gaussian splatting</h4>
+        <dl>
+          <dt>Solves for</dt><dd>An appearance model. Millions of view-dependent blobs are fitted to photographs.</dd>
+          <dt>Strong at</dt><dd>Photorealism including soft reflection and real depth, rendered in real time in browsers with small filesize. Fidelity holds equally in a booth and in a large live room.</dd>
+          <dt>Struggles with</dt><dd>Survey grade measurements. Reflective and screen-lit surfaces can create artifacts. A capture is a fixed moment; rearranging a room means re-shooting it.</dd>
+        </dl>
+      </div>
+    </div>
+    <p>These should be thought of as different instruments used for different goals. LiDAR is the right answer when you need
+      dimensions. Photogrammetry is the right answer when you need a mesh to build on for videogames. Splatting
+      is the right answer when the goal is for someone to feel like they are standing in a lifelike room,
+      which directly benefits this usecase the most. They also combine: a LiDAR pass
+      makes a sound geometry backbone underneath a high-fidelity photographic capture, and that is
+      the natural direction for this pipeline as the spaces get larger.</p>
+  </div>
+</section>
+
+<!-- ============================ 02 ============================ -->
+<section class="band">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">02</span><h2>Capture</h2></div>
+
+    <p class="lead">Each room is shot as one continuous scan rather than a set of separate passes
+      stitched together afterwards. Two kinds of pass go into it, and both are shown below.</p>
+
+    <h3>The room pass</h3>
+    <figure class="window" id="fig-room">
+      <div class="panel"><svg id="viz-room" role="img"
+        aria-label="Isometric wireframe of a control room with three dotted orbital paths at low, middle and high height, and a camera travelling along each in turn."></svg></div>
+      <figcaption>
+        <span>Room pass — three orbits, three heights, three radii</span>
+        <span class="state">continuous take</span>
+      </figcaption>
+    </figure>
+    <p>Three loops around the room's outer perimeter, at different heights but similar distances from the walls. This allows for consistent viewing of a space despite viewing angle, position and direction.</p>
+    <ul class="plain">
+      <li><strong>Walking pace is tied to subject distance.</strong> Motion blur scales with speed
+        divided by distance, so the wide loops move at roughly twice the pace of the close work.</li>
+      <li><strong>Nothing is on automatic.</strong> Shutter, aperture, focus, ISO and white
+        balance are set once and left for the entire session. Every automatic adjustment is a
+        mechanism for making the same surface look different between two frames, which is exactly
+        the contradiction the optimiser cannot resolve.</li>
+      <li><strong>The take can be split, the coverage cannot.</strong> Recording can stop and
+        restart — from the same spot, at the same framing — without harming the result. What must
+        stay unbroken is the chain of overlapping views.</li>
+    </ul>
+
+    <h3>The Hero Pass</h3>
+    <figure class="window" id="fig-hero">
+      <div class="panel"><svg id="viz-hero" role="img"
+        aria-label="Isometric wireframe of a studio monitor with three dotted half-arcs sweeping across its front face at low, middle and high angles, and a camera travelling along them."></svg></div>
+      <figcaption>
+        <span>Hero pass — dense arcs across the faces that matter</span>
+        <span class="state">same solve</span>
+      </figcaption>
+    </figure>
+    <p>The room loops cannot deliver a console faceplate or the top of a synth — they are too far
+      away and at the wrong angle. Featured gear gets its own passes, shot inside the same
+      continuous take so there is no compositing and no risk of scale drift between the close-up
+      and the room around it.</p>
+    <p>Three arcs across the front, at low, eye and high angles, holding a constant distance so
+      the object stays at one scale throughout. The arcs stop rather than close, and that is
+      deliberate on two counts. A visitor will never see the back of a monitor bolted into a
+      soffit, and more importantly, training averages error across
+      all frames roughly evenly — a surplus of low-value views will outvote the detailed ones on
+      every surface they share. Frames are an allotted budget for the compiler, and they get spent on the angles someone will
+      actually look at.</p>
+    <p>The dot spacing in the second panel is tighter than in the first on purpose: a hero pass
+      samples several times more densely per foot travelled than a room pass does.</p>
+
+    <h3>What the room needs for capture day</h3>
+    <ul class="plain">
+      <li>The space presented the way you want it remembered: gear placed, cables dressed, and
+        surfaces tidy.</li>
+      <li>Lighting set even, neutral and bright, then left alone for the whole session. This is
+        the single largest quality lever, and your control over it is a real technical advantage.</li>
+      <li>The room clear of movement and people while filming. Anything that moves becomes a smear.</li>
+      <li>Roughly 60 to 90 minutes per room, depending on how many hero pieces it carries.</li>
+      <li>mood lighting is applied afterwards as a color grade to frames that recorded the detail.
+        Bright and even lighting on capture day is optimal; atmosphere can be added later.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================ 03 ============================ -->
+<section class="band">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Integration</h2></div>
+
+    <p class="lead"> A capture that runs on any modern machine is the goal with these captures, so it is worth being specific
+      about how the scans are shown and about how the viewer integrates seamlessly into your existing webpage.</p>
+
+    <h3>Why the graphics API matters here</h3>
+    <p>Splats are translucent, and translucency is order-dependent: to blend correctly they have
+      to be drawn back to front. That means re-sorting millions of blobs by distance every time
+      the camera moves. One requirement, and it is the requirement that separates the two
+      available graphics paths in a browser.</p>
+    <p><strong>WebGPU</strong> exposes compute shaders — general-purpose programs that run on the
+      graphics card. The depth sort runs on the GPU in parallel, every frame, alongside the
+      rendering. Ordering is always correct and the blob budget is high. PlayCanvas, the engine
+      underneath your viewer, has one of the more mature compute-based splat renderers on the web.</p>
+    <p><strong>WebGL2</strong>, the older path, has no compute shaders at all. The sort has to run
+      on the CPU, normally in a background worker, and it cannot keep up with the frame rate. In
+      practice the picture renders at full speed while the ordering trails a few frames behind:
+      invisible when panning gently, briefly visible as a shimmer when the camera swings hard. The
+      blob budget is lower too, because both the sort and the cost of uploading a new order scale
+      with count.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th></th><th>WebGPU</th><th>WebGL2 fallback</th></tr></thead>
+        <tbody>
+          <tr><th>Depth sort</th><td>On the GPU, every frame</td><td>On a CPU worker, trailing the camera</td></tr>
+          <tr><th>Blob budget</th><td>High</td><td>Reduced</td></tr>
+          <tr><th>Under fast camera motion</th><td>Correct throughout</td><td>Brief re-ordering shimmer</td></tr>
+          <tr><th>Where it runs</th><td>Chrome and Edge 113+, Firefox 141+, Safari 26 on macOS Tahoe, iOS and iPadOS 26</td><td>Effectively every browser and device from roughly 2017 onward</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>This is a materially different picture from even a year ago. Until Safari 26, iPhone was
+      the one mainstream platform with no compute path — and because Apple requires every iOS
+      browser to use its own engine, "open it in Chrome instead" was not a workaround. Safari 26
+      closed that gap, and WebGPU is now on by default in all four major browser engines. The
+      fallback still earns its place, for older iOS versions, Android hardware without Vulkan,
+      Firefox on Linux, and locked-down corporate machines. WebGL2 It is now the exception rather
+      than the mobile default.</p>
+
+    <h3>The ladder, and what a visitor sees at each rung</h3>
+    <ul class="plain">
+      <li><strong>WebGPU available.</strong> Full scene, full blob count, correct ordering, smooth
+        guided fly-ins. What most desktop and current-generation phone visitors will get.</li>
+      <li><strong>WebGL2 only.</strong> The same scene and the same interactions at a reduced blob
+        count, with sorting moved to a worker. Visibly the same experience; marginally softer, and
+        occasionally shimmering on a hard camera swing.</li>
+      <li><strong>Neither.</strong> A still poster frame of the room and a plain explanation —
+        never a blank canvas or a broken page. Detected before anything loads, not after it fails.</li>
+    </ul>
+    <p>Worth noting alongside that: nothing graphics-related initialises until a visitor actually
+      clicks into a viewer. Someone who reads your studio page and never opens a room pays none of
+      the loading cost. That is a deliberate choice, and it is why an interactive 3D feature does
+      not impede the page's performance.</p>
+
+    <h3>How the viewer becomes yours</h3>
+    <p>A third-party embed announces whose platform it is: someone else's styling, someone else's
+      typography, a watermark, and a page that lives on their domain. The alternative is a viewer
+      built as part of your site, and the difference shows in five specific places.</p>
+    <ul class="plain">
+      <li><strong>It sits in the page, not over it.</strong> The 3D room is a window set into your
+        layout, with your headings and your copy around it, not a full-screen takeover a visitor
+        has to open separately from. The panels above are that pattern in miniature.</li>
+      <li><strong>Everything visual comes from a short list of tokens.</strong> Paper, ink, one
+        accent, two typefaces. Re-theming the entire surface is editing that list rather than
+        rebuilding the interface — this page and the viewer both work that way.</li>
+      <li><strong>Hero points are data, not code.</strong> Each one is a row: a label, a short
+        note, a camera position, an anchor in 3D space. Adding a piece of gear means adding a row;
+        the menu, the marker and the guided fly-in all follow from it. Which means the content can
+        change without touching the build.</li>
+      <li><strong>One room in memory at a time.</strong> Moving between studios loads the new
+        scene and frees the old one. Unglamorous, and it is the thing that keeps a five-room
+        facility viable on a phone.</li>
+      <li><strong>It ships as static files on your own domain.</strong> HTML, JavaScript and
+        compressed scene data — no platform account, no per-space hosting fee, no third-party
+        roadmap that can deprecate it. You also get a private standalone link for pitches, which
+        is the same build served from a different address.</li>
+    </ul>
+
+    <h3>The honest costs</h3>
+    <ul class="plain">
+      <li>A room is tens of megabytes. The first open shows a brief loading state; larger rooms
+        are larger downloads, and the Common Room will be the biggest of them.</li>
+      <li>Older phones will run at reduced blob counts and lower frame rates. Usable but not
+        identical.</li>
+      <li>Scenes stream one at a time, which is what keeps memory in check but does mean a short
+        wait when moving from one studio to another.</li>
+    </ul>
+  </div>
+</section>
+
+<script>
+/* ============================================================
+   SHARED — one isometric projection and one frame loop serve
+   all three panels. The scene builders below are independent.
+   ============================================================ */
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs = {}) => {
+  const node = document.createElementNS(NS, tag);
+  for (const k in attrs) node.setAttribute(k, attrs[k]);
+  return node;
+};
+const C30 = Math.cos(Math.PI / 6);
+const project = (x, y, z) => [ (x - z) * C30, (x + z) * 0.5 - y ];
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ASPECT = 1.5;                            // every panel gets the same proportions
+
+function Scene(id) {
+  const svg = document.getElementById(id);
+  const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  return {
+    svg,
+    pt(x, y, z) {                              // project, and remember the extents
+      const p = project(x, y, z);
+      b.x0 = Math.min(b.x0, p[0]); b.x1 = Math.max(b.x1, p[0]);
+      b.y0 = Math.min(b.y0, p[1]); b.y1 = Math.max(b.y1, p[1]);
+      return p;
+    },
+    layer(cls) { const g = el('g', { class: cls }); svg.appendChild(g); return g; },
+    fit(pad, padRight) {                       // size the viewBox to whatever got drawn
+      let x = b.x0 - pad, y = b.y0 - pad;
+      let w = (b.x1 - b.x0) + pad * 2 + padRight, h = (b.y1 - b.y0) + pad * 2;
+      if (w / h < ASPECT) { const nw = h * ASPECT; x -= (nw - w) / 2; w = nw; }
+      else                { const nh = w / ASPECT; y -= (nh - h) / 2; h = nh; }
+      svg.setAttribute('viewBox', [x, y, w, h].map(n => n.toFixed(1)).join(' '));
+    },
+  };
+}
+
+const poly = pts => pts.map(p => p.map(n => n.toFixed(2)).join(',')).join(' ');
+
+function camera(g) {
+  const cone = el('polygon', { class: 'cone', points: '0,0 0,0 0,0' });
+  const halo = el('circle', { class: 'cam-halo', r: 8.5, cx: 0, cy: 0 });
+  const dot  = el('circle', { class: 'cam',      r: 4,   cx: 0, cy: 0 });
+  g.append(cone, halo, dot);
+  const L = 46, HALF = Math.tan(14 * Math.PI / 180) * L;
+  return (px, py, aim) => {                    // draw the body and the little view cone
+    let dx = aim[0] - px, dy = aim[1] - py;
+    const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+    const bx = px + dx * L, by = py + dy * L, nx = -dy * HALF, ny = dx * HALF;
+    cone.setAttribute('points',
+      `${px.toFixed(2)},${py.toFixed(2)} ` +
+      `${(bx + nx).toFixed(2)},${(by + ny).toFixed(2)} ` +
+      `${(bx - nx).toFixed(2)},${(by - ny).toFixed(2)}`);
+    for (const n of [halo, dot]) {
+      n.setAttribute('cx', px.toFixed(2)); n.setAttribute('cy', py.toFixed(2));
+    }
+  };
+}
+
+/* One frame loop for the whole page, and each panel only advances its own
+   clock while it is actually on screen — off-screen panels cost nothing. */
+const tickers = [];
+function ticker(watch, fn) {
+  const t = { fn, time: 0, live: !REDUCE };
+  tickers.push(t);
+  if (!REDUCE && 'IntersectionObserver' in window) {
+    new IntersectionObserver(
+      entries => { t.live = entries[0].isIntersecting; }, { threshold: 0.1 }
+    ).observe(watch);
+  }
+  fn(0);
+}
+if (!REDUCE) {
+  let prev = null;
+  requestAnimationFrame(function loop(ts) {
+    const dt = prev === null ? 0 : Math.min((ts - prev) / 1000, 0.1);
+    prev = ts;
+    for (const t of tickers) if (t.live) { t.time += dt; t.fn(t.time); }
+    requestAnimationFrame(loop);
+  });
+}
+
+/* ============================================================
+   PANEL 1 — splat convergence
+   Positions are interpolated by CSS, not JavaScript: each circle
+   is placed at its final spot, offset by a per-element custom
+   property, and one class toggle sends them all home.
+   ============================================================ */
+(function convergence() {
+  const OBJ = { w: 118, h: 212, d: 130 };
+  const hx = OBJ.d / 2, hz = OBJ.w / 2;
+  const s = Scene('viz-splat');
+  const g = s.layer('splats');
+  const targets = [];
+  const add = (x, y, z, key) => targets.push({ x, y, z, key: !!key });
+
+  // Drivers on the front face — the detail that makes it read as a speaker.
+  [[70, 42], [70, 33], [70, 11], [162, 23], [162, 15], [162, 6], [22, 11]]
+    .forEach(([y, r]) => {
+      const n = Math.max(10, Math.round(r * 0.75));
+      for (let i = 0; i < n; i++) {
+        const t = i / n * Math.PI * 2;
+        add(hx, y + r * Math.sin(t), r * Math.cos(t), true);
+      }
+    });
+
+  // Silhouette: the edges a viewer can actually see, plus the baffle inset.
+  const seg = (a, c, step) => {
+    const d = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const n = Math.max(2, Math.round(Math.hypot(d[0], d[1], d[2]) / step));
+    for (let i = 0; i <= n; i++) add(a[0] + d[0] * i / n, a[1] + d[1] * i / n, a[2] + d[2] * i / n);
+  };
+  const A = [ hx, hz], B = [ hx, -hz], Cc = [-hx, -hz], D = [-hx, hz];
+  const v = (c, y) => [c[0], y, c[1]];
+  [[A, B], [D, A]].forEach(([p, q]) => seg(v(p, 0), v(q, 0), 17));
+  [[A, B], [B, Cc], [Cc, D], [D, A]].forEach(([p, q]) => seg(v(p, OBJ.h), v(q, OBJ.h), 17));
+  [A, B, D].forEach(c => seg(v(c, 0), v(c, OBJ.h), 17));
+  const bi = 7, bz = hz - bi, by0 = bi, by1 = OBJ.h - bi;
+  seg([hx, by0, -bz], [hx, by0, bz], 26); seg([hx, by1, -bz], [hx, by1, bz], 26);
+  seg([hx, by0, -bz], [hx, by1, -bz], 26); seg([hx, by0, bz], [hx, by1, bz], 26);
+
+  // A sparse scatter across the three visible faces gives the cloud some body.
+  const jit = m => (Math.random() - 0.5) * m;
+  for (let y = 14; y < OBJ.h - 10; y += 26)
+    for (let z = -hz + 12; z < hz - 10; z += 24) add(hx, y + jit(7), z + jit(7));
+  for (let x = -hx + 12; x < hx - 10; x += 30)
+    for (let z = -hz + 12; z < hz - 10; z += 28) add(x + jit(8), OBJ.h, z + jit(8));
+  for (let x = -hx + 12; x < hx - 10; x += 32)
+    for (let y = 16; y < OBJ.h - 12; y += 30) add(x + jit(8), y + jit(8), hz);
+
+  targets.forEach(t => {
+    const home = s.pt(t.x, t.y, t.z);
+    // A random 3D displacement, projected — so the cloud disperses in space, not on screen.
+    const az = Math.random() * Math.PI * 2, pitch = (Math.random() - 0.5) * Math.PI;
+    const m = 34 + Math.random() * 62;
+    const away = s.pt(
+      t.x + m * Math.cos(pitch) * Math.cos(az),
+      t.y + m * Math.sin(pitch) * 0.85,
+      t.z + m * Math.cos(pitch) * Math.sin(az));
+    g.appendChild(el('circle', {
+      class: 'splat', cx: home[0].toFixed(2), cy: home[1].toFixed(2),
+      r: (t.key ? 1.9 : 1.5) + Math.random() * 1.1,
+      style: `--dx:${(away[0] - home[0]).toFixed(1)}px;` +
+             `--dy:${(away[1] - home[1]).toFixed(1)}px;` +
+             `--sc:${(3.4 + Math.random() * 2.2).toFixed(2)};` +
+             `--o:${(t.key ? 0.34 : 0.19) + Math.random() * 0.14};` +
+             `--d:${(Math.random() * 0.75).toFixed(2)}s`,
+    }));
+  });
+
+  s.fit(30, 0);
+
+  const fig = document.getElementById('fig-splat');
+  const state = document.getElementById('splat-state');
+  const setTrained = on => {
+    fig.classList.toggle('is-trained', on);
+    state.textContent = on ? 'trained scene' : 'random initialisation';
+  };
+  if (REDUCE) { setTrained(true); return; }
+  let on = false;
+  setTimeout(() => setTrained(on = true), 800);
+  setInterval(() => setTrained(on = !on), 4600);
+})();
+
+/* ============================================================
+   PANEL 2 — the room pass
+   ============================================================ */
+(function roomPass() {
+  const ROOM = { w: 300, d: 300, h: 265 };
+  const RINGS = [ { tag: 'low pass', t: 0.18 }, { tag: 'mid pass', t: 0.50 },
+                  { tag: 'high pass', t: 0.82 } ];
+  const INSET = 0.15, CORNER = 0.32, PASS_S = 4.5, SAMPLES = 220;
+  const hw = ROOM.w / 2, hd = ROOM.d / 2;
+  const s = Scene('viz-room');
+
+  // A rounded rectangle lying flat in the room, described by arc length so the
+  // camera can be placed a known distance along it. CORNER = 1 gives a circle.
+  function ring(y) {
+    const inset = INSET * Math.min(ROOM.w, ROOM.d);
+    const ax = hw - inset, az = hd - inset;
+    const r = CORNER * Math.min(ax, az), a = ax - r, b = az - r;
+    const q = r * Math.PI / 2, Q = Math.PI / 2;
+    const arc = (cx, cz, t) => [ cx + r * Math.cos(t), cz + r * Math.sin(t) ];
+    const segs = [
+      { len: 2 * b, at: u => [ ax, -b + 2 * b * u ] },
+      { len: q,     at: u => arc( a,  b, u * Q) },
+      { len: 2 * a, at: u => [ a - 2 * a * u, az ] },
+      { len: q,     at: u => arc(-a,  b, Q + u * Q) },
+      { len: 2 * b, at: u => [ -ax, b - 2 * b * u ] },
+      { len: q,     at: u => arc(-a, -b, Math.PI + u * Q) },
+      { len: 2 * a, at: u => [ -a + 2 * a * u, -az ] },
+      { len: q,     at: u => arc( a, -b, 3 * Q + u * Q) },
+    ];
+    const total = segs.reduce((acc, seg) => acc + seg.len, 0);
+    return { y, total, at(d0) {
+      let d = ((d0 % total) + total) % total;
+      for (let i = 0; i < segs.length; i++) {
+        if (d <= segs[i].len || i === segs.length - 1) {
+          const [x, z] = segs[i].at(segs[i].len ? d / segs[i].len : 0);
+          return { x, y, z };
+        }
+        d -= segs[i].len;
+      }
+    } };
+  }
+
+  const FOOT = [ [1, 1], [1, -1], [-1, -1], [-1, 1] ];   // index 0 is nearest the viewer
+  const corner = ([sx, sz], y) => s.pt(sx * hw, y, sz * hd);
+  const base = FOOT.map(c => corner(c, 0));
+  const cap  = FOOT.map(c => corner(c, ROOM.h));
+
+  const rings = RINGS.map(cfg => {
+    const geo = ring(ROOM.h * cfg.t);
+    let d = '', anchor = null;
+    for (let i = 0; i < SAMPLES; i++) {
+      const p = geo.at(geo.total * i / SAMPLES);
+      const [x, y] = s.pt(p.x, p.y, p.z);
+      if (!anchor || x > anchor[0]) anchor = [x, y];
+      d += (i ? 'L' : 'M') + x.toFixed(2) + ' ' + y.toFixed(2);
+    }
+    return { ...cfg, geo, d: d + 'Z', anchor };
+  });
+
+  const gRoom = s.layer('room'), gPaths = s.layer('paths'),
+        gTags = s.layer('tags'), gCam = s.layer('cam');
+
+  gRoom.appendChild(el('polygon', { class: 'floor', points: poly(base) }));
+  gRoom.appendChild(el('polygon', { class: 'edge', points: poly(base) }));
+  gRoom.appendChild(el('polygon', { class: 'edge edge--soft', points: poly(cap) }));
+  FOOT.forEach((c, i) => gRoom.appendChild(el('line', {
+    class: 'edge' + (i === 0 ? ' edge--cut' : ''),   // near corner opened up
+    x1: base[i][0].toFixed(2), y1: base[i][1].toFixed(2),
+    x2: cap[i][0].toFixed(2),  y2: cap[i][1].toFixed(2),
+  })));
+
+  rings.forEach(r => {
+    r.node = el('path', { class: 'path path--room', d: r.d });
+    gPaths.appendChild(r.node);
+    r.tagNode = el('text', { class: 'tag',
+      x: (r.anchor[0] + 16).toFixed(2), y: (r.anchor[1] + 4).toFixed(2) });
+    r.tagNode.textContent = r.tag;
+    gTags.appendChild(r.tagNode);
+  });
+
+  const place = camera(gCam);
+  s.fit(34, 96);
+
+  const AIM = project(0, ROOM.h * 0.45, 0);
+  let active = -1;
+  ticker(document.getElementById('fig-room'), time => {
+    const cycle = rings.length * PASS_S, inCycle = time % cycle;
+    const i = Math.floor(inCycle / PASS_S), u = (inCycle % PASS_S) / PASS_S;
+    const p = rings[i].geo.at(rings[i].geo.total * u);
+    const [px, py] = project(p.x, p.y, p.z);
+    place(px, py, AIM);
+    if (i !== active) {
+      active = i;
+      rings.forEach((r, k) => {
+        r.node.classList.toggle('is-active', k === i);
+        r.tagNode.classList.toggle('is-active', k === i);
+      });
+    }
+  });
+})();
+
+/* ============================================================
+   PANEL 3 — the hero pass
+   ============================================================ */
+(function heroPass() {
+  const OBJ = { w: 118, h: 212, d: 130 };
+  const ORBIT = { r: 218, sweep: 180 };
+  const ARCS = [ { tag: 'low arc', elev: -26 }, { tag: 'mid arc', elev: 0 },
+                 { tag: 'high arc', elev: 32 } ];
+  const PASS_S = 3.6, SAMPLES = 140;
+  const hx = OBJ.d / 2, hz = OBJ.w / 2;
+  const s = Scene('viz-hero');
+
+  const C = { A: [ hx, hz], B: [ hx, -hz], C: [-hx, -hz], D: [-hx, hz] };
+  const base = {}, cap = {};
+  for (const k in C) { base[k] = s.pt(C[k][0], 0, C[k][1]); cap[k] = s.pt(C[k][0], OBJ.h, C[k][1]); }
+
+  // A circle drawn on the front face. Projected it becomes a tilted ellipse, so
+  // rather than derive the ellipse we sample the circle in 3D and project each point.
+  const faceCircle = (y0, r, samples = 64) => {
+    let d = '';
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples * Math.PI * 2;
+      const [x, y] = s.pt(hx, y0 + r * Math.sin(t), r * Math.cos(t));
+      d += (i ? 'L' : 'M') + x.toFixed(2) + ' ' + y.toFixed(2);
+    }
+    return d + 'Z';
+  };
+
+  // Latitude lines on a dome around the object, so the camera holds a constant
+  // standoff while the angle changes. Set every elev to 0 for equal radii.
+  const CY = OBJ.h * 0.52;
+  const arcGeo = elev => {
+    const e = elev * Math.PI / 180;
+    const rp = ORBIT.r * Math.cos(e), y = CY + ORBIT.r * Math.sin(e);
+    const half = ORBIT.sweep / 2 * Math.PI / 180;
+    return { at(u) { const phi = -half + u * 2 * half;
+      return { x: rp * Math.cos(phi), y, z: rp * Math.sin(phi) }; } };
+  };
+
+  const arcs = ARCS.map(cfg => {
+    const geo = arcGeo(cfg.elev);
+    let d = '', anchor = null; const ends = [];
+    for (let i = 0; i <= SAMPLES; i++) {
+      const p = geo.at(i / SAMPLES);
+      const [x, y] = s.pt(p.x, p.y, p.z);
+      if (!anchor || x > anchor[0]) anchor = [x, y];
+      if (i === 0 || i === SAMPLES) ends.push([x, y]);
+      d += (i ? 'L' : 'M') + x.toFixed(2) + ' ' + y.toFixed(2);
+    }
+    return { ...cfg, geo, d, anchor, ends };        // no Z — the path stays open
+  });
+
+  const gObj = s.layer('obj'), gPaths = s.layer('paths'),
+        gTags = s.layer('tags'), gCam = s.layer('cam');
+
+  gObj.appendChild(el('polygon', { class: 'face--top',   points: poly([cap.A, cap.B, cap.C, cap.D]) }));
+  gObj.appendChild(el('polygon', { class: 'face--front', points: poly([base.A, base.B, cap.B, cap.A]) }));
+  gObj.appendChild(el('polygon', { class: 'face--side',  points: poly([base.D, base.A, cap.A, cap.D]) }));
+
+  const line = (p, q, cls) => gObj.appendChild(el('line', { class: cls,
+    x1: p[0].toFixed(2), y1: p[1].toFixed(2), x2: q[0].toFixed(2), y2: q[1].toFixed(2) }));
+  line(base.A, base.B, 'edge'); line(base.D, base.A, 'edge');
+  line(base.B, base.C, 'edge edge--cut'); line(base.C, base.D, 'edge edge--cut');
+  line(base.C, cap.C,  'edge edge--cut');          // the hidden far corner
+  ['A', 'B', 'D'].forEach(k => line(base[k], cap[k], 'edge'));
+  gObj.appendChild(el('polygon', { class: 'edge', points: poly([cap.A, cap.B, cap.C, cap.D]) }));
+  gObj.appendChild(el('polygon', { class: 'baffle', points: poly([
+    s.pt(hx, 7, hz - 7), s.pt(hx, 7, -hz + 7),
+    s.pt(hx, OBJ.h - 7, -hz + 7), s.pt(hx, OBJ.h - 7, hz - 7) ]) }));
+  [[70, 42, 'driver'], [70, 33, 'driver driver--soft'], [70, 11, 'driver'],
+   [162, 23, 'driver driver--soft'], [162, 15, 'driver'], [162, 6, 'driver'],
+   [22, 11, 'driver driver--soft']]
+    .forEach(([y, r, cls]) => gObj.appendChild(el('path', { class: cls, d: faceCircle(y, r) })));
+
+  arcs.forEach(a => {
+    a.node = el('path', { class: 'path path--hero', d: a.d });
+    gPaths.appendChild(a.node);
+    a.ends.forEach(([x, y]) => gPaths.appendChild(el('circle', {
+      class: 'path-end', cx: x.toFixed(2), cy: y.toFixed(2), r: 3.4 })));
+    a.tagNode = el('text', { class: 'tag',
+      x: (a.anchor[0] + 16).toFixed(2), y: (a.anchor[1] + 4).toFixed(2) });
+    a.tagNode.textContent = a.tag;
+    gTags.appendChild(a.tagNode);
+  });
+
+  const place = camera(gCam);
+  s.fit(34, 96);
+
+  const AIM = project(hx, OBJ.h * 0.55, 0);        // the baffle, not the box centre
+  const ease = u => 0.5 - 0.5 * Math.cos(Math.PI * u);
+  let active = -1;
+  ticker(document.getElementById('fig-hero'), time => {
+    const cycle = arcs.length * PASS_S, inCycle = time % cycle;
+    const i = Math.floor(inCycle / PASS_S), u = ease((inCycle % PASS_S) / PASS_S);
+    // Passes alternate direction, so each one starts where the last ended.
+    const p = arcs[i].geo.at(i % 2 === 0 ? u : 1 - u);
+    const [px, py] = project(p.x, p.y, p.z);
+    place(px, py, AIM);
+    if (i !== active) {
+      active = i;
+      arcs.forEach((a, k) => {
+        a.node.classList.toggle('is-active', k === i);
+        a.tagNode.classList.toggle('is-active', k === i);
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>

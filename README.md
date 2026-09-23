@@ -1,5 +1,16 @@
 # Darilux Studio — JFTR demo reel
 
+## What's live
+
+| URL | Page |
+|---|---|
+| `/` | **The JFTR studio viewer** — Studios B, C and E as labels; click one, then click into the window to walk the room. Vanilla JS, no build step: it lives whole in `public/` (`index.html`, `css/`, `js/`, `splats/`, `technology-capture-integration.html`) and Vite copies it to `dist/` untouched. Edit the room list in `public/js/studios.js`. Studios B and C are generated placeholder rooms until they're scanned; Studio E streams from its SuperSplat publish. Under `npm run dev` open `/index.html` (the dev server has no root entry to fall back to). |
+| `/bluedio.html`, `/bluedio-phone.html` | The Bluedio experience, built from `src/` by Vite as before. |
+
+The reel described below was the front page until the studio viewer replaced it; it is preserved at the git tag **`bluedio`**.
+
+---
+
 An interactive, browser-based reel of three Gaussian-splat captures for **Just For The Record**, delivered as one page:
 
 1. **Five Synthesizers** — small scale, with a hero point on each instrument
