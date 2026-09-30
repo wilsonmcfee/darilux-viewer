@@ -243,7 +243,7 @@ h1{
   opacity:0; visibility:hidden; transition:opacity .4s ease, visibility 0s linear .4s;
 }
 .panel[data-state="inside"] .hud{ opacity:1; visibility:visible; transition:opacity .4s ease .5s, visibility 0s }
-.hud button{
+.hud button, .heroes button, .rooms button{
   appearance:none; -webkit-appearance:none; cursor:pointer; border-radius:0;
   font-family:var(--ui); font-size:10px; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
   color:rgb(var(--cream) / .86); padding:.85em 1.05em; line-height:1;
@@ -251,15 +251,41 @@ h1{
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
   transition:color .2s ease, border-color .2s ease, background-color .2s ease;
 }
-.hud button:hover{ color:rgb(var(--cream)); border-color:var(--accent); background:rgb(184 57 46 / .85) }
+.hud button:hover, .heroes button:hover, .rooms button:hover{ color:rgb(var(--cream)); border-color:var(--accent); background:rgb(184 57 46 / .85) }
 .hud button[hidden]{ display:none }
 
-@media (pointer:coarse){ .hud button{ padding:1em 1.05em } }
+/* hero views: numbered, bottom left, arriving and leaving with the top-right buttons */
+.heroes{
+  position:absolute; left:12px; bottom:12px; display:flex; gap:6px; flex-wrap:wrap;
+  opacity:0; visibility:hidden; transition:opacity .4s ease, visibility 0s linear .4s;
+}
+.heroes[hidden]{ display:none }
+.panel[data-state="inside"] .heroes{ opacity:1; visibility:visible; transition:opacity .4s ease .5s, visibility 0s }
+.heroes button{ display:inline-flex; align-items:baseline; gap:.7em; }
+.hero-n{ font-variant-numeric:tabular-nums; }
+.hero-label{ color:rgb(var(--cream) / .6); }
+.heroes button:hover .hero-label{ color:inherit }
+
+/* rooms within a studio: a joined pair (or more) top left; the room you're in reads as lit */
+.rooms{
+  position:absolute; left:12px; top:12px; display:flex;
+  opacity:0; visibility:hidden; transition:opacity .4s ease, visibility 0s linear .4s;
+}
+.rooms[hidden]{ display:none }
+.panel[data-state="inside"] .rooms{ opacity:1; visibility:visible; transition:opacity .4s ease .5s, visibility 0s }
+.rooms button + button{ border-left-width:0 }
+.rooms button[aria-pressed="true"]{
+  color:rgb(20 16 12); background:rgb(var(--cream) / .92); border-color:rgb(var(--cream) / .92); cursor:default;
+}
+
+@media (pointer:coarse){ .hud button, .heroes button, .rooms button{ padding:1em 1.05em } }
 
 /* ---- pointer lock (desktop): click the view to look, Esc hands the cursor back ---- */
 .panel.can-lock[data-state="inside"]{ cursor:default }
 /* while the mouse is the head the buttons can't be reached anyway, so the view goes clean */
-.panel.is-locked[data-state="inside"] .hud{ opacity:0; visibility:hidden; transition:opacity .3s ease, visibility 0s linear .3s; }
+.panel.is-locked[data-state="inside"] .hud,
+.panel.is-locked[data-state="inside"] .heroes,
+.panel.is-locked[data-state="inside"] .rooms{ opacity:0; visibility:hidden; transition:opacity .3s ease, visibility 0s linear .3s; }
 
 /* The iris: a soft vignette that closes in from the edges around the prompt while the mouse is
    free, and opens back out into the sides of the frame once it's taken. --iris is where the
@@ -355,6 +381,12 @@ html.is-immersive .window{ animation:none; transform:none; }
   border:0; box-shadow:none;
 }
 .panel.is-immersive .hud{ display:none }
+.panel.is-immersive .rooms{ left:calc(14px + env(safe-area-inset-left)); top:calc(14px + env(safe-area-inset-top)); }
+/* hero numbers stack in the bottom-right corner, opposite the walk stick, under the right thumb */
+.panel.is-immersive .heroes{
+  left:auto; right:calc(14px + env(safe-area-inset-right)); bottom:calc(32px + env(safe-area-inset-bottom));
+  flex-direction:column; align-items:flex-end;
+}
 
 /* walk stick: fixed in the corner, a press anywhere near it grabs it (see walk-controls.js) */
 .stick{

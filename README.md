@@ -4,7 +4,7 @@
 
 | URL | Page |
 |---|---|
-| `/` | **The JFTR studio viewer** — Studios B, C and E as labels; click one, then click into the window to walk the room. Vanilla JS, no build step: it lives whole in `public/` (`index.html`, `css/`, `js/`, `splats/`, `technology-capture-integration.html`) and Vite copies it to `dist/` untouched. Edit the room list in `public/js/studios.js`. Studios B and C are generated placeholder rooms until they're scanned; Studio E streams from its SuperSplat publish. Under `npm run dev` open `/index.html` (the dev server has no root entry to fall back to). |
+| `/` | **The JFTR studio viewer** — Studios B, C and E as labels; click one, then click into the window to walk the room. Vanilla JS, no build step: it lives whole in `public/` (`index.html`, `css/`, `js/`, `splats/`, `technology-capture-integration.html`) and Vite copies it to `dist/` untouched. Edit the room list in `public/js/studios.js`. Studio B is a generated placeholder room until it's scanned. Studio C is self-hosted in `public/splats/studio-c/` as two rooms: the control room (`studio-c.sog`, encoded from the detail-pass export) and the vocal booth (`booth/`, its SuperSplat publish mirrored with both LODs). Studio E streams from its SuperSplat publish. Under `npm run dev` open `/index.html` (the dev server has no root entry to fall back to). |
 | `/bluedio.html`, `/bluedio-phone.html` | The Bluedio experience, built from `src/` by Vite as before. |
 
 The reel described below was the front page until the studio viewer replaced it; it is preserved at the git tag **`bluedio`**.

@@ -119,6 +119,12 @@ export class Viewer {
         this.controls.reset();
     }
 
+    // glide to a hero pose, { position, target }
+    flyTo(pose) {
+        this.controls.flyTo(pose);
+        this.app.renderNextFrame = true;
+    }
+
     load(studio, onProgress) {
         this.unload();
 

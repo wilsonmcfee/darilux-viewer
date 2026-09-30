@@ -29,6 +29,21 @@ const STICK_SLOP = 1.6;         // a press within this many ring radii grabs the
 const KNOB_TRAVEL = 0.6;        // knob travel as a fraction of the ring radius
 const PITCH_LIMIT = 85;
 
+const FLY_SECONDS = 1.6;        // hero fly-in duration
+
+// { position, target } -> the position plus the yaw / pitch that faces the target
+function viewOf({ position, target }) {
+    const [px, py, pz] = position;
+    const dx = target[0] - px, dy = target[1] - py, dz = target[2] - pz;
+    return {
+        position: [px, py, pz],
+        yaw: Math.atan2(-dx, -dz) / DEG,
+        pitch: Math.atan2(dy, Math.hypot(dx, dz)) / DEG
+    };
+}
+
+const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
 const KEYMAP = {
     KeyW: 'forward', ArrowUp: 'forward',
     KeyS: 'back', ArrowDown: 'back',
@@ -53,6 +68,7 @@ export class WalkControls {
     lockable = POINTER_LOCK;    // off in the full-screen touch layout
 
     _turn = [0, 0];             // yaw / pitch still to apply from locked mouse movement
+    _flight = null;             // an in-progress hero fly-in
     _velocity = [0, 0, 0];
     _wheel = 0;
     _keys = new Set();
@@ -121,14 +137,8 @@ export class WalkControls {
 
     // start = { position, target } in world units; walk = the studio's walk block or null
     setPose(start, bounds = null, walk = null) {
-        const [px, py, pz] = start.position;
-        const [tx, ty, tz] = start.target;
-        const dx = tx - px, dy = ty - py, dz = tz - pz;
-        this._home = {
-            position: [px, py, pz],
-            yaw: Math.atan2(-dx, -dz) / DEG,
-            pitch: Math.atan2(dy, Math.hypot(dx, dz)) / DEG
-        };
+        this._home = viewOf(start);
+        this._flight = null;
         this.bounds = bounds;
         this.walk = walk ? {
             speed: WALK_SPEED,
@@ -149,7 +159,29 @@ export class WalkControls {
         return this.walk.floorY + this.walk.eyeHeight * this.walk.unitsPerMetre;
     }
 
+    // Hero fly-in: eases position, yaw (the short way round) and pitch to a { position, target }
+    // pose. Walking, the stick or the wheel takes over mid-flight; mouse look waits for it to land.
+    // In a walk-mode studio the eye-height lock resumes on landing, so hero poses there belong
+    // on the eye plane.
+    flyTo(pose, seconds = FLY_SECONDS) {
+        const to = viewOf(pose);
+        this._flight = {
+            p0: [...this.position], p1: to.position,
+            yaw0: this.yaw, dYaw: ((to.yaw - this.yaw) % 360 + 540) % 360 - 180,
+            pitch0: this.pitch, pitch1: to.pitch,
+            t: 0, seconds
+        };
+        this._velocity = [0, 0, 0];
+        this._wheel = 0;
+        this._turn = [0, 0];
+    }
+
+    get flying() {
+        return !!this._flight;
+    }
+
     reset() {
+        this._flight = null;
         if (!this._home) return;
         this.position = [...this._home.position];
         this.yaw = this._home.yaw;
@@ -184,6 +216,25 @@ export class WalkControls {
 
     update(dt) {
         dt = Math.min(dt, 0.1);
+
+        if (this._flight) {
+            const k = this._keys;
+            const steering = this._stick || this._look || this._wheel !== 0 ||
+                ['forward', 'back', 'left', 'right', 'up', 'down'].some((a) => k.has(a));
+            if (this.enabled && steering) {
+                this._flight = null;
+            } else {
+                const f = this._flight;
+                f.t = Math.min(1, f.t + dt / f.seconds);
+                const e = easeInOutCubic(f.t);
+                for (let i = 0; i < 3; i++) this.position[i] = f.p0[i] + (f.p1[i] - f.p0[i]) * e;
+                this.yaw = f.yaw0 + f.dYaw * e;
+                this.pitch = f.pitch0 + (f.pitch1 - f.pitch0) * e;
+                this._turn = [0, 0];
+                if (f.t >= 1) this._flight = null;
+                return;
+            }
+        }
 
         // locked mouse look eases in over a few frames, as SuperSplat's damped camera angles do
         if (this._turn[0] !== 0 || this._turn[1] !== 0) {

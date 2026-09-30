@@ -42,6 +42,15 @@ let hintTimer = 0;
 let viewer = null;
 let viewerPromise = null;
 let loadToken = 0;
+let roomIndex = 0;
+
+// A studio is one scan unless it lists `rooms`. room() is the scan to load right now: the
+// room's own fields over the studio's, with an id that keeps rooms' assets apart.
+function room(studio = current) {
+    if (!studio?.rooms) return studio;
+    const r = studio.rooms[roomIndex] ?? studio.rooms[0];
+    return { ...studio, rooms: undefined, ...r, id: `${studio.id}-${r.id}`, roomName: r.name };
+}
 
 // ---- labels --------------------------------------------------------------------------------
 
@@ -68,11 +77,12 @@ function setState(state) {
     viewer?.setActive(state === 'loading' || state === 'inside');
     viewer?.enableControls(state === 'inside');
 
-    const name = current?.name ?? '';
+    const here = room();
+    const name = here?.roomName ? `${current.name} · ${here.roomName}` : current?.name ?? '';
     const captions = {
         gate: [`${name} · ${current?.status ?? ''}`, 'Click the window to enter'],
         loading: [`${name} · ${current?.status ?? ''}`, 'Loading'],
-        inside: [HINT, `In ${name}`],
+        inside: [hintFor(here), `In ${name}`],
         error: [`${name} · ${current?.status ?? ''}`, 'Could not load'],
         unsupported: [`${name} · ${current?.status ?? ''}`, '3D unavailable']
     };
@@ -115,8 +125,78 @@ document.addEventListener('pointerlockchange', () => {
 });
 document.addEventListener('pointerlockerror', updateLookHint);
 
+function hintFor(studio) {
+    const n = studio?.heroes?.length ?? 0;
+    if (!n) return HINT;
+    const keys = n === 1 ? '1' : `1–${Math.min(n, 9)}`;
+    return coarse ? `${HINT} · tap a number for a hero view` : `${HINT} · ${keys} hero views`;
+}
+
+// ---- hero views: numbered buttons that glide the camera to an authored pose -----------------
+
+const heroNav = panel.querySelector('.heroes');
+
+function renderHeroes(studio) {
+    const heroes = studio.heroes ?? [];
+    heroNav.hidden = heroes.length === 0;
+    heroNav.replaceChildren(...heroes.map((hero, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.hero = String(i);
+        const n = String(i + 1).padStart(2, '0');
+        btn.innerHTML = `<span class="hero-n">${n}</span>${hero.label ? `<span class="hero-label">${hero.label}</span>` : ''}`;
+        btn.setAttribute('aria-label', hero.label ? `Hero view ${i + 1}: ${hero.label}` : `Hero view ${i + 1}`);
+        return btn;
+    }));
+}
+
+function goToHero(i) {
+    const hero = room()?.heroes?.[i];
+    if (!hero || !viewer || panel.dataset.state !== 'inside') return;
+    viewer.flyTo(hero.pose);
+}
+
+// ---- rooms: a studio with several scanned spaces gets buttons to move between them ----------
+
+const roomNav = panel.querySelector('.rooms');
+
+function renderRooms() {
+    const rooms = current?.rooms ?? [];
+    roomNav.hidden = rooms.length < 2;
+    roomNav.replaceChildren(...rooms.map((r, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.room = String(i);
+        btn.textContent = r.name;
+        btn.setAttribute('aria-pressed', String(i === roomIndex));
+        return btn;
+    }));
+}
+
+// like walking through a door: the gate drops over the view, the next scan loads behind it
+// (the previous one released first) and the room opens behind the closed iris again
+function switchRoom(i) {
+    if (!current?.rooms?.[i] || (i === roomIndex && panel.dataset.state === 'inside')) return;
+    loadToken++;
+    unlockPointer();
+    viewer?.unload();
+    roomIndex = i;
+    renderRooms();
+    renderHeroes(room());
+    history.replaceState(null, '', hashFor(current));
+    loadRoom();
+}
+
+function hashFor(studio) {
+    const r = studio.rooms && roomIndex > 0 ? `/${studio.rooms[roomIndex].id}` : '';
+    return `#studio-${studio.id}${r}`;
+}
+
 function showGate(studio) {
-    gateKicker.textContent = studio.name;
+    renderRooms();
+    renderHeroes(room(studio));
+    const here = room(studio);
+    gateKicker.textContent = here.roomName && roomIndex > 0 ? `${studio.name} · ${here.roomName}` : studio.name;
     gateLetter.textContent = studio.letter;
     gateArt.classList.toggle('has-poster', !!studio.poster);
     gateArt.style.setProperty('--poster', studio.poster ? `url("${studio.poster}")` : 'none');
@@ -150,12 +230,15 @@ function supportsGraphics() {
 
 // ---- actions -------------------------------------------------------------------------------
 
-function openStudio(studio, { scroll = false, updateHash = true } = {}) {
-    const same = current?.id === studio.id && !win.hidden;
+function openStudio(studio, { scroll = false, updateHash = true, roomId = null } = {}) {
+    const wantRoom = Math.max(0, studio.rooms?.findIndex((r) => r.id === roomId) ?? 0);
+    const same = current?.id === studio.id && !win.hidden && wantRoom === roomIndex;
     if (!same) {
         loadToken++;
+        unlockPointer();
         viewer?.unload();
         current = studio;
+        roomIndex = wantRoom;
         for (const btn of labels.children) {
             btn.setAttribute('aria-pressed', String(btn.dataset.id === studio.id));
         }
@@ -166,7 +249,7 @@ function openStudio(studio, { scroll = false, updateHash = true } = {}) {
             void win.offsetWidth;   // restart the reveal animation
             win.classList.add('is-open');
         }
-        if (updateHash) history.replaceState(null, '', `#studio-${studio.id}`);
+        if (updateHash) history.replaceState(null, '', hashFor(studio));
     }
     if (scroll) {
         const rect = win.getBoundingClientRect();
@@ -176,9 +259,8 @@ function openStudio(studio, { scroll = false, updateHash = true } = {}) {
     }
 }
 
-async function enter() {
+function enter() {
     if (!current || panel.dataset.state === 'loading' || panel.dataset.state === 'inside') return;
-    const studio = current;
 
     if (!supportsGraphics()) {
         gateTitle.textContent = 'This browser can’t show 3D rooms';
@@ -189,9 +271,14 @@ async function enter() {
     }
 
     if (IMMERSIVE) setImmersive(true);
+    loadRoom();
+}
 
+// loads room() into the window: from the gate on entry, or mid-visit when the room changes
+async function loadRoom() {
+    const studio = room();
     const token = ++loadToken;
-    loaderLabel.textContent = `Loading ${studio.name}`;
+    loaderLabel.textContent = `Loading ${studio.roomName ?? studio.name}`;
     setProgress(0, 'download');
     setState('loading');
 
@@ -246,6 +333,18 @@ function setImmersive(on) {
 gate.addEventListener('click', enter);
 
 panel.addEventListener('click', (e) => {
+    const roomBtn = e.target.closest('[data-room]')?.dataset.room;
+    if (roomBtn !== undefined) {
+        switchRoom(Number(roomBtn));
+        return;
+    }
+    const hero = e.target.closest('[data-hero]')?.dataset.hero;
+    if (hero !== undefined) {
+        goToHero(Number(hero));
+        // take the mouse too, so the iris opens onto the flight rather than hiding it
+        lockPointer();
+        return;
+    }
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (action === 'look') lockPointer();
     if (action === 'reset') viewer?.resetView();
@@ -256,18 +355,28 @@ panel.addEventListener('click', (e) => {
     }
 });
 
+// number keys jump to hero views, and keep working while the mouse is locked
+panel.addEventListener('keydown', (e) => {
+    const m = e.code.match(/^(?:Digit|Numpad)([1-9])$/);
+    if (!m || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!room()?.heroes?.[Number(m[1]) - 1]) return;
+    e.preventDefault();
+    goToHero(Number(m[1]) - 1);
+});
+
 if (!document.fullscreenEnabled) fullscreenBtn.hidden = true;
 document.addEventListener('fullscreenchange', () => {
     fullscreenBtn.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
     if (panel.dataset.state === 'inside') panel.focus({ preventScroll: true });
 });
 
-// ---- deep links: #studio-e opens that studio's window (it still waits for a click) --------
+// ---- deep links: #studio-e opens that studio's window, #studio-c/booth a room in it (both still
+//      wait for a click) --------------------------------------------------------------------
 
 function fromHash() {
-    const id = location.hash.match(/^#studio-([a-z0-9]+)$/i)?.[1]?.toLowerCase();
-    const studio = STUDIOS.find((s) => s.id === id);
-    if (studio) openStudio(studio, { updateHash: false });
+    const m = location.hash.match(/^#studio-([a-z0-9]+)(?:\/([a-z0-9-]+))?$/i);
+    const studio = STUDIOS.find((s) => s.id === m?.[1]?.toLowerCase());
+    if (studio) openStudio(studio, { updateHash: false, roomId: m[2]?.toLowerCase() ?? null });
 }
 window.addEventListener('hashchange', fromHash);
 fromHash();
