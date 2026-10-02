@@ -266,43 +266,44 @@ h1{
 .hero-label{ color:rgb(var(--cream) / .6); }
 .heroes button:hover .hero-label{ color:inherit }
 
-/* hero card: what a hero view is looking at. Bottom centre, lifted clear of the hero buttons;
-   it rises in a beat after the fly-in starts, and stays while the mouse is the head */
+/* hero card: what a hero view is looking at. Bottom right, clear of the hero buttons and of the
+   centre of the shot (and of "Click to look around"); it rises in a beat after the fly-in
+   starts, and stays while the mouse is the head */
 .hero-card{
-  position:absolute; left:50%; bottom:58px; transform:translate(-50%, 14px);
-  width:min(560px, 100% - 48px); max-height:58%; overflow-y:auto; box-sizing:border-box;
+  position:absolute; right:12px; bottom:12px; transform:translateY(10px);
+  width:min(370px, 100% - 32px); max-height:46%; overflow-y:auto; box-sizing:border-box;
   scrollbar-width:thin; scrollbar-color:rgb(var(--cream) / .3) transparent;
-  padding:18px 26px 17px; color:rgb(var(--cream));
+  padding:12px 16px 12px; color:rgb(var(--cream));
   background:rgb(20 16 12 / .66); border:1px solid rgb(var(--cream) / .18);
   -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
   opacity:0; visibility:hidden; pointer-events:none;
   transition:opacity .35s ease, transform .4s ease, visibility 0s linear .35s;
 }
 .hero-card.is-open{
-  opacity:1; visibility:visible; pointer-events:auto; transform:translate(-50%, 0);
+  opacity:1; visibility:visible; pointer-events:auto; transform:none;
   transition:opacity .5s ease .35s, transform .7s cubic-bezier(.2,.85,.15,1) .35s, visibility 0s;
 }
 .hero-card-title{
-  display:flex; align-items:center; gap:10px; margin:0 34px 5px 0;
-  font-family:var(--display); font-weight:400; font-size:23px; line-height:1.12; letter-spacing:-.005em;
+  display:flex; align-items:center; gap:7px; margin:0 26px 3px 0;
+  font-family:var(--display); font-weight:400; font-size:17px; line-height:1.12; letter-spacing:-.005em;
 }
 .hero-card-icon{ display:inline-flex; color:var(--accent); }
 .hero-card-icon:empty{ display:none }
-.hero-card-icon svg{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.2; }
+.hero-card-icon svg{ width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.3; }
 .hero-card-sub{
-  margin:0 0 10px; font-family:var(--ui); font-size:10px; font-weight:500;
+  margin:0 0 7px; font-family:var(--ui); font-size:8.5px; font-weight:500;
   letter-spacing:.16em; text-transform:uppercase; color:rgb(var(--cream) / .55);
 }
 .hero-card-sub[hidden]{ display:none }
-.hero-card-desc{ margin:0; font-family:var(--body); font-size:15.5px; line-height:1.55; color:rgb(var(--cream) / .84); }
+.hero-card-desc{ margin:0; font-family:var(--ui); font-size:11px; font-weight:400; line-height:1.55; color:rgb(var(--cream) / .82); }
 .hero-card-close{
   appearance:none; -webkit-appearance:none; margin:0; padding:0; cursor:pointer;
-  position:absolute; top:13px; right:13px; width:28px; height:28px; display:grid; place-items:center;
+  position:absolute; top:9px; right:9px; width:22px; height:22px; display:grid; place-items:center;
   border-radius:50%; border:1px solid rgb(var(--cream) / .22); background:none; color:rgb(var(--cream) / .75);
   transition:color .2s ease, border-color .2s ease, background-color .2s ease;
 }
 .hero-card-close:hover{ color:rgb(var(--cream)); border-color:var(--accent); background:var(--accent); }
-.hero-card-close svg{ width:10px; height:10px; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; }
+.hero-card-close svg{ width:8px; height:8px; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; }
 
 /* rooms within a studio: a joined pair (or more) top left; the room you're in reads as lit */
 .rooms{
@@ -422,11 +423,11 @@ html.is-immersive .window{ animation:none; transform:none; }
 .panel.is-immersive .rooms{ left:calc(14px + env(safe-area-inset-left)); top:calc(14px + env(safe-area-inset-top)); }
 /* the card rides above the walk stick so neither thumb loses its control */
 .panel.is-immersive .hero-card{
-  bottom:calc(164px + env(safe-area-inset-bottom)); width:calc(100% - 28px); max-height:38%;
-  padding:15px 18px 14px;
+  left:50%; right:auto; bottom:calc(164px + env(safe-area-inset-bottom)); transform:translate(-50%, 10px);
+  width:min(340px, 100% - 28px); max-height:32%;
 }
-.panel.is-immersive .hero-card-title{ font-size:20px; }
-.panel.is-immersive .hero-card-desc{ font-size:14.5px; line-height:1.5; }
+.panel.is-immersive .hero-card.is-open{ transform:translate(-50%, 0); }
+.panel.is-immersive .hero-card-desc{ font-size:11.5px; line-height:1.5; }
 /* hero numbers stack in the bottom-right corner, opposite the walk stick, under the right thumb */
 .panel.is-immersive .heroes{
   left:auto; right:calc(14px + env(safe-area-inset-right)); bottom:calc(32px + env(safe-area-inset-bottom));
