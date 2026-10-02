@@ -66,6 +66,7 @@ export class WalkControls {
     touchDegPerPx = 0.28;       // set by the viewer from the live fov and window height
     mouseDegPerPx = 0.1125;     // locked mouse look; set by the viewer from the live fov
     lockable = POINTER_LOCK;    // off in the full-screen touch layout
+    speedScale = 1;             // set by the viewer: the phone layout walks faster than desktop
 
     _turn = [0, 0];             // yaw / pitch still to apply from locked mouse movement
     _flight = null;             // an in-progress hero fly-in
@@ -268,7 +269,7 @@ export class WalkControls {
         if (len > 1) { strafe /= len; walk /= len; }
 
         const upm = this.walk?.unitsPerMetre ?? 1;
-        const speed = (this.walk?.speed ?? WALK_SPEED) * upm *
+        const speed = (this.walk?.speed ?? WALK_SPEED) * upm * this.speedScale *
             (k.has('fast') ? (this.walk?.runMultiplier ?? FAST_MULTIPLIER) : 1);
         const yaw = this.yaw * DEG;
         const fwd = [-Math.sin(yaw), 0, -Math.cos(yaw)];

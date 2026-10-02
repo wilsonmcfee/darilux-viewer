@@ -13,6 +13,9 @@ const DEG = Math.PI / 180;
 // In landscape the horizontal span is capped instead, or a wide phone would go fisheye.
 const MOBILE_FOV = 100;
 const MOBILE_MAX_HFOV = 120;
+// The phone layout walks 15% faster than desktop: the thumb-stick is the only way to cover ground
+// there, with no Shift to hurry.
+const MOBILE_SPEED_SCALE = 1.15;
 const params = new URLSearchParams(location.search);
 const FOV_OVERRIDE = Number(params.get('fov')) || null;
 const AUTHOR = params.has('author');
@@ -112,6 +115,7 @@ export class Viewer {
     setImmersive(on) {
         this._immersive = on;
         this.controls.setLockable(!on);
+        this.controls.speedScale = on ? MOBILE_SPEED_SCALE : 1;
         this._fit();
     }
 
