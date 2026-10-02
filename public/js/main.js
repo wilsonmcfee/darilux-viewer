@@ -74,6 +74,7 @@ for (const studio of STUDIOS) {
 
 function setState(state) {
     panel.dataset.state = state;
+    if (state !== 'inside') hideCard();
     viewer?.setActive(state === 'loading' || state === 'inside');
     viewer?.enableControls(state === 'inside');
 
@@ -128,8 +129,8 @@ document.addEventListener('pointerlockerror', updateLookHint);
 function hintFor(studio) {
     const n = studio?.heroes?.length ?? 0;
     if (!n) return HINT;
-    const keys = n === 1 ? '1' : `1–${Math.min(n, 9)}`;
-    return coarse ? `${HINT} · tap a number for a hero view` : `${HINT} · ${keys} hero views`;
+    const keys = n === 1 ? '1 for the hero view' : `1–${Math.min(n, 9)} hero views`;
+    return coarse ? `${HINT} · tap a number for a hero view` : `${HINT} · ${keys}`;
 }
 
 // ---- hero views: numbered buttons that glide the camera to an authored pose -----------------
@@ -154,6 +155,34 @@ function goToHero(i) {
     const hero = room()?.heroes?.[i];
     if (!hero || !viewer || panel.dataset.state !== 'inside') return;
     viewer.flyTo(hero.pose);
+    showCard(hero);
+}
+
+// ---- hero card: what a hero view is looking at. Opens on the fly-in, goes when the visitor
+//      closes it, walks off, or the room changes. Copy is set as text, never as markup. -------
+
+const card = panel.querySelector('.hero-card');
+const ICONS = {
+    speaker: '<svg viewBox="0 0 16 16"><rect x="3.5" y="1.5" width="9" height="13" rx="1.5"/><circle cx="8" cy="10" r="2.4"/><circle cx="8" cy="4.6" r=".9"/></svg>'
+};
+
+function showCard(hero) {
+    if (!hero?.description) {
+        hideCard();
+        return;
+    }
+    card.querySelector('.hero-card-name').textContent = hero.label ?? '';
+    card.querySelector('.hero-card-icon').innerHTML = ICONS[hero.icon] ?? '';
+    const sub = card.querySelector('.hero-card-sub');
+    sub.textContent = hero.caption ?? '';
+    sub.hidden = !hero.caption;
+    card.querySelector('.hero-card-desc').textContent = hero.description;
+    card.scrollTop = 0;
+    card.classList.add('is-open');
+}
+
+function hideCard() {
+    card.classList.remove('is-open');
 }
 
 // ---- rooms: a studio with several scanned spaces gets buttons to move between them ----------
@@ -289,6 +318,7 @@ async function loadRoom() {
             viewer = await viewerPromise;
             viewer.setActive(true);
             viewer.setImmersive(panel.classList.contains('is-immersive'));
+            viewer.onUserMove = hideCard;
             console.info(`Studio viewer: ${viewer.deviceType} renderer`);
             if (new URLSearchParams(location.search).has('debug')) window.viewer = viewer;
         }
@@ -347,7 +377,11 @@ panel.addEventListener('click', (e) => {
     }
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (action === 'look') lockPointer();
-    if (action === 'reset') viewer?.resetView();
+    if (action === 'close-card') hideCard();
+    if (action === 'reset') {
+        hideCard();
+        viewer?.resetView();
+    }
     if (action === 'leave') leave();
     if (action === 'fullscreen') {
         if (document.fullscreenElement) document.exitFullscreen();

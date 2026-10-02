@@ -123,6 +123,11 @@ export class Viewer {
         this.controls.reset();
     }
 
+    // called each frame the visitor walks, so the page can put away a hero card they've left
+    set onUserMove(fn) {
+        this.controls.onUserMove = fn;
+    }
+
     // glide to a hero pose, { position, target }
     flyTo(pose) {
         this.controls.flyTo(pose);

@@ -19,7 +19,9 @@
 //             { min: [x, y, z], max: [x, y, z] }.
 //   heroes    optional authored views, shown as numbered buttons (and keys 1–9) that glide the
 //             camera there: [{ label?, pose: { position, target } }]. Author them with
-//             ?author and __logPose(), like `start`.
+//             ?author and __logPose(), like `start`. A hero with a `description` also opens a
+//             card on arrival: `label` is its title, plus optional `caption` (the small line
+//             under it) and `icon` ('speaker').
 //   rooms     optional, for a studio with more than one scanned space: [{ id, name, src, start,
 //             fov, heroes, ... }]. Each room takes the per-scan fields above; the first is the one
 //             "Click to enter" opens, and buttons in the window move between them (one scan in
@@ -93,6 +95,16 @@ export const STUDIOS = [
         src: 'https://d28zzqy0iyovbz.cloudfront.net/2e3188e6/v1/lod-meta.json',
         poster: 'https://s3-eu-west-1.amazonaws.com/images.playcanvas.com/splat/2e3188e6/v1/xl.webp',
         start: { position: [0, 2, 0], target: [2, 2, 0] },
-        fov: 103
+        fov: 103,
+        heroes: [
+            {
+                // card copy carried over word for word from the original JFTR reel (src/demos.ts)
+                label: 'Dolby Atmos Monitors',
+                caption: 'PMC 6-2 · Immersive monitoring',
+                icon: 'speaker',
+                description: `Studio E's Atmos bed runs on PMC 6-2 monitors — a three-way active design PMC released in 2021, purpose-built for rooms where immersive mixes have to translate exactly. Twin 6" woofers, a 2" midrange, and a 1" tweeter are each driven by their own 400W Class-D amplifier, with PMC's ATL bass-loading holding tonal balance steady from quiet reference levels up to 109dB. The result: what you hear at the desk is what ships.`,
+                pose: { position: [-0.481, 2, 0.017], target: [-1.471, 1.859, 0.021] }
+            }
+        ]
     }
 ];

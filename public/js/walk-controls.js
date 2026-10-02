@@ -67,6 +67,7 @@ export class WalkControls {
     mouseDegPerPx = 0.1125;     // locked mouse look; set by the viewer from the live fov
     lockable = POINTER_LOCK;    // off in the full-screen touch layout
     speedScale = 1;             // set by the viewer: the phone layout walks faster than desktop
+    onUserMove = null;          // called each frame the visitor is walking (keys, stick, wheel)
 
     _turn = [0, 0];             // yaw / pitch still to apply from locked mouse movement
     _flight = null;             // an in-progress hero fly-in
@@ -262,6 +263,8 @@ export class WalkControls {
                 walk -= this._stick.dy;
             }
         }
+
+        if (strafe !== 0 || walk !== 0 || rise !== 0 || this._wheel !== 0) this.onUserMove?.();
 
         // clamp rather than normalise: a half-pushed stick walks at half speed, a key diagonal
         // still can't exceed full speed

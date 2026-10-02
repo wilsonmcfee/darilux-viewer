@@ -75,6 +75,14 @@
       <div class="look-hint" aria-hidden="true">Esc to release the mouse</div>
       <nav class="heroes" aria-label="Hero views" hidden></nav>
       <nav class="rooms" aria-label="Rooms" hidden></nav>
+      <aside class="hero-card" aria-live="polite">
+        <button class="hero-card-close" type="button" data-action="close-card" aria-label="Close">
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+        </button>
+        <h3 class="hero-card-title"><span class="hero-card-icon" aria-hidden="true"></span><span class="hero-card-name"></span></h3>
+        <p class="hero-card-sub"></p>
+        <p class="hero-card-desc"></p>
+      </aside>
 
       <div class="stick" aria-hidden="true"><span class="stick-knob"></span></div>
       <button class="exit" type="button" data-action="leave" aria-label="Leave room">
