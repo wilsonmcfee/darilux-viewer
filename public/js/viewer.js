@@ -18,6 +18,13 @@ const MOBILE_MAX_HFOV = 120;
 const MOBILE_SPEED_SCALE = 1.15;
 const params = new URLSearchParams(location.search);
 const FOV_OVERRIDE = Number(params.get('fov')) || null;
+// ?lite=1 / ?full=1 force a studio's `srcMobile` / `src` on any device, for A/B on a phone
+const LITE_OVERRIDE = params.has('lite') ? true : params.has('full') ? false : null;
+// SuperSplat re-bakes view-dependent colour every 0.2° of camera change, which a desktop shrugs
+// off. On a phone, across 1.5M SH3 gaussians, it is the lag: walking re-bakes nearly every frame.
+// The phone layout uses the Bluedio viewer's measured 30° instead (see its TEMPLATE.md).
+const COLOR_UPDATE_DESKTOP = 0.2;
+const COLOR_UPDATE_PHONE = 30;
 const AUTHOR = params.has('author');
 
 export class Viewer {
@@ -61,7 +68,7 @@ export class Viewer {
         gsplat.minContribution = 1;
         gsplat.alphaClip = 1 / 255;
         gsplat.radialSorting = true;
-        gsplat.colorUpdateAngle = 0.2;
+        gsplat.colorUpdateAngle = COLOR_UPDATE_DESKTOP;
         gsplat.renderer = webgpu ? pc.GSPLAT_RENDERER_RASTER_GPU_SORT : pc.GSPLAT_RENDERER_RASTER_CPU_SORT;
         // WebGL2 sorts on the CPU, so it gets a smaller splat budget
         gsplat.splatBudget = (pc.platform.mobile ? 2 : 4) * (webgpu ? 1 : 0.5) * 1e6;
@@ -116,6 +123,7 @@ export class Viewer {
         this._immersive = on;
         this.controls.setLockable(!on);
         this.controls.speedScale = on ? MOBILE_SPEED_SCALE : 1;
+        this.app.scene.gsplat.colorUpdateAngle = on ? COLOR_UPDATE_PHONE : COLOR_UPDATE_DESKTOP;
         this._fit();
     }
 
@@ -128,6 +136,12 @@ export class Viewer {
         this.controls.onUserMove = fn;
     }
 
+    // phones (the full-screen touch layout) and WebGL2, whose sort runs on the CPU, get a studio's
+    // lighter `srcMobile` where it has one; a WebGPU desktop gets the full `src`
+    get lite() {
+        return LITE_OVERRIDE ?? (this._immersive || pc.platform.mobile || this.deviceType !== 'webgpu');
+    }
+
     // glide to a hero pose, { position, target }
     flyTo(pose) {
         this.controls.flyTo(pose);
@@ -137,7 +151,7 @@ export class Viewer {
     load(studio, onProgress) {
         this.unload();
 
-        const url = studio.src;
+        const url = (this.lite && studio.srcMobile) || studio.src;
         const filename = url.split('?')[0].split('/').pop();
         const asset = new pc.Asset(`${studio.id}/${filename}`, 'gsplat', { url, filename });
         this.asset = asset;

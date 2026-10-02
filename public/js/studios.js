@@ -3,6 +3,8 @@
 //
 //   src       .ply / .compressed.ply / .sog / lod-meta.json (streamed). Relative paths are
 //             served from this site; absolute URLs need CORS enabled on their host.
+//   srcMobile optional lighter scan for phones and WebGL2 (e.g. the same splats with
+//             --filter-harmonics 0); ?lite=1 / ?full=1 force one or the other for testing.
 //   poster    optional still shown in the window before the visitor clicks in.
 //   start     where the visitor stands and what they face, in metres, Y-up.
 //   fov       field of view in degrees across the wider side of the window (SuperSplat's convention).
@@ -67,6 +69,9 @@ export const STUDIOS = [
                 // STUDIO_C_DETAIL_v1.ply (1.5M gaussians, SH3) encoded with splat-transform 3.3.0:
                 //   --filter-nan -m -i 3 --max-workers 8 studio-c.sog
                 src: 'splats/studio-c/studio-c.sog',
+                // phones and WebGL2: the same 1.5M with base colour only (adds --filter-harmonics 0),
+                // so the view-dependent colour re-bake never runs. 17.5 MB.
+                srcMobile: 'splats/studio-c/studio-c-mobile.sog',
                 start: { position: [0.262, 0.096, -0.392], target: [0.25, 0.122, 0.608] },
                 fov: 90,
                 heroes: [
